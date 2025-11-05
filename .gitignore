@@ -1,0 +1,8 @@
+# Python & Spark cache
+__pycache__/
+*.pyc
+.env
+spark-warehouse/
+**/checkpoint*/
+**/checkpoints*/
+Procesamiento/spark/inbox/
