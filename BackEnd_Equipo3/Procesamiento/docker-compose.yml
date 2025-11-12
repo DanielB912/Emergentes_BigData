@@ -1,52 +1,90 @@
+version: "3.9"
+
 services:
   spark-master:
     build:
       context: .
       dockerfile: Dockerfile.spark
     container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
     command: >
-      bash -c "$SPARK_HOME/bin/spark-class org.apache.spark.deploy.master.Master
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
       --host spark-master --port 7077 --webui-port 8080"
     ports:
       - "7077:7077"
       - "8080:8080"
-    networks: [sparknet]
+    networks:
+      - bigdata_net
 
   spark-worker-1:
     build:
       context: .
       dockerfile: Dockerfile.spark
     container_name: spark-worker-1
+    hostname: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_PORT=7078
+      - SPARK_WORKER_WEBUI_PORT=8081
     command: >
-      bash -c "$SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker
-      spark://spark-master:7077 --webui-port 8081"
-    depends_on: [spark-master]
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077 --cores 2 --memory 2G --webui-port 8081"
+    depends_on:
+      - spark-master
     ports:
       - "8081:8081"
-    networks: [sparknet]
+    networks:
+      - bigdata_net
 
   spark-worker-2:
     build:
       context: .
       dockerfile: Dockerfile.spark
     container_name: spark-worker-2
+    hostname: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_PORT=7079
+      - SPARK_WORKER_WEBUI_PORT=8082
     command: >
-      bash -c "$SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker
-      spark://spark-master:7077 --webui-port 8082"
-    depends_on: [spark-master]
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077 --cores 2 --memory 2G --webui-port 8082"
+    depends_on:
+      - spark-master
     ports:
       - "8082:8082"
-    networks: [sparknet]
+    networks:
+      - bigdata_net
 
   spark-submit:
     build:
       context: .
       dockerfile: Dockerfile.spark
     container_name: spark-submit
+    hostname: spark-submit
+    environment:
+      - SPARK_MODE=submit
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - PYSPARK_PYTHON=python3
+      - PYSPARK_DRIVER_PYTHON=python3
     volumes:
       - ./spark:/opt/spark-apps
     working_dir: /opt/spark-apps
-    networks: [sparknet]
+    depends_on:
+      - spark-master
+    networks:
+      - bigdata_net
 
   postgres:
     image: postgres:15
@@ -57,8 +95,9 @@ services:
       - POSTGRES_DB=gamc
     ports:
       - "5432:5432"
-    networks: [sparknet]
+    networks:
+      - bigdata_net
 
 networks:
-  sparknet:
-    driver: bridge
+  bigdata_net:
+    external: true

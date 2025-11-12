@@ -1,20 +1,21 @@
+# Java 17 para Spark 3.5.x
 FROM eclipse-temurin:17-jdk
 
-# Instala dependencias
+# Python + libs útiles
 RUN apt-get update && apt-get install -y curl python3 python3-pip && \
-    pip3 install --break-system-packages pyspark psycopg2-binary && \
+    pip3 install --break-system-packages pyspark pandas kafka-python psycopg2-binary && \
     apt-get clean
 
-# Descarga Apache Spark 3.5.1 precompilado
+# Instalar Spark 3.5.1 Hadoop 3
 RUN curl -L -o spark.tgz https://archive.apache.org/dist/spark/spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz && \
     tar -xzf spark.tgz -C /opt/ && \
     mv /opt/spark-3.5.1-bin-hadoop3 /opt/spark && \
     rm spark.tgz
 
-# Configura variables de entorno
 ENV SPARK_HOME=/opt/spark
 ENV PATH=$SPARK_HOME/bin:$PATH
 ENV PYSPARK_PYTHON=python3
+ENV PYSPARK_DRIVER_PYTHON=python3
 
 WORKDIR /opt/spark-apps
-ENTRYPOINT ["/bin/bash", "-c", "sleep infinity"]
+CMD ["/bin/bash"]
