@@ -1,1 +1,146 @@
-Creacion proyecto para backend
+Instrucciones para levantar la Base de Datos (Equipo 3 – Almacenamiento)
+
+Este módulo contiene todo lo necesario para levantar la base de datos del proyecto (PostgreSQL + pgAdmin) usando Docker Compose y cargar automáticamente el esquema relacional.
+
+Contenido de esta carpeta
+
+docker-compose.yml → Orquestación de contenedores (PostgreSQL + pgAdmin)
+
+schema_postgres.sql → Script SQL que crea todas las tablas de sensores y métricas
+
+mongo-init.js → Archivo de inicialización de MongoDB (Solo para el compañero encargado de NoSQL, por eso esta comentado)
+
+test_postgres.py → Script de prueba para validar conexión, insert, select y delete
+
+info.txt → Este documento con instrucciones
+
+1. REQUISITOS PREVIOS
+
+Antes de comenzar, instala:
+
+Docker Desktop
+
+Python 3.10+
+
+Librerías necesarias
+
+Abrir una terminal en esta carpeta y ejecutar:
+
+python -m pip install psycopg2-binary
+
+2. COMO LEVANTAR LOS CONTENEDORES (PostgreSQL y pgAdmin)
+
+Abrir PowerShell dentro de esta carpeta:
+
+PRACTICA 3/Emergentes_BigData/BaseDeDatos_Equipo3/
+
+Y ejecutar:
+
+docker compose up -d
+
+Esto levantará:
+
+postgres_iot → Base de datos PostgreSQL con el puerto 5432 abierto (OJOOO, SI TIENES POSGRE LOCAL INSTALADO DEBES DETENERLO)
+
+pgadmin_iot → Panel web para administrar PostgreSQL (puerto 5050)
+
+El número de puertos está definido en docker-compose.yml.
+
+3. ACCEDER AL PDADMIN (si quieres)
+
+Después de levantar los contenedores, abrir en el navegador:
+
+http://localhost:5050
+
+
+Credenciales configuradas en docker-compose:
+
+Email: admin@iot.com
+
+Password: admin123
+
+Luego, registrar un servidor:
+
+Host: postgres_iot
+
+User: postgres
+
+Password: postgres (o lo que quieras)
+
+Database: sensores_iot
+
+Esto permite administrar las tablas visualmente.
+
+4. LA BDD SE CREA AUTOMATICAMENTE 
+
+El archivo:
+
+schema_postgres.sql
+
+
+se ejecuta automáticamente cuando el contenedor postgres_iot se inicia por primera vez.
+
+Esto crea todas las tablas:
+
+sensor
+
+telemetria
+
+sensor_aire
+
+sensor_sonido
+
+sensor_soterrado
+
+metricas_aire
+
+metricas_sonido
+
+metricas_soterrado
+
+correlaciones_globales
+
+No es necesario ejecutar nada manualmente.
+
+5. PROBAR LA CONEXION CON PYTHON (OJOOOO PA ESTA PRUEBA SI TIENES POSTGRE INSTALADO EN TU PC DEBES DETENERLO DESDE LOS SERVICIOS)
+
+Ejecutar:
+
+python test_postgres.py
+
+
+Si todo está correcto verás:
+
+Conexión exitosa
+
+Inserción de un sensor temporal
+
+Consulta del registro
+
+Eliminación del registro
+
+Cierre de conexión
+
+Esto confirma que PostgreSQL funciona correctamente dentro del entorno del proyecto.
+
+6. DETENER LOS CONTENEDORES
+
+Para apagarlos:
+
+docker compose down
+
+
+Los datos quedan guardados gracias al volumen:
+
+pgdata:/var/lib/postgresql/data
+
+7. SI QUIERES EJECUTARLO DE NUEVO DESPUES DE APAGAR TU PC O REINICIARLO
+
+Si reinicias o cierras Docker Desktop, para levantar el proyecto solo ejecuta:
+
+docker compose up -d
+
+8. SOPORTE PARA MONGO
+
+MongoDB está incluido en docker-compose.yml, pero está comentado, porque pertenece al encargado del módulo NoSQL.
+

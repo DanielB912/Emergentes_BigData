@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  
+  postgres_iot:
+    image: postgres:15
+    container_name: postgres_iot
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: SensoresIoT
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./schema_postgres.sql:/docker-entrypoint-initdb.d/schema.sql
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - iot_network
+
+ 
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_iot
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@iot.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres_iot
+    networks:
+      - iot_network
+
+  # ===========================
+  # Servicio MongoDB
+  # ===========================
+  # mongo_iot:
+  #   image: mongo:6
+  #   container_name: mongo_iot
+  #   restart: always
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - iot_network
+
+  # 
+  # Interfaz Mongo Express
+  # 
+  # mongo_express:
+  #   image: mongo-express
+  #   container_name: mongo_express_iot
+  #   restart: always
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     ME_CONFIG_MONGODB_SERVER: mongo_iot
+  #     ME_CONFIG_MONGODB_ADMINUSERNAME: ""
+  #     ME_CONFIG_MONGODB_ADMINPASSWORD: ""
+  #   depends_on:
+  #     - mongo_iot
+  #   networks:
+  #     - iot_network
+
+# Volúmenes y red
+
+volumes:
+  pgdata:
+  # mongodb_data:
+
+networks:
+  iot_network:
+    driver: bridge
