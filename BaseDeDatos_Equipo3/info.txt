@@ -1,146 +1,248 @@
-Instrucciones para levantar la Base de Datos (Equipo 3 – Almacenamiento)
-
-Este módulo contiene todo lo necesario para levantar la base de datos del proyecto (PostgreSQL + pgAdmin) usando Docker Compose y cargar automáticamente el esquema relacional.
-
-Contenido de esta carpeta
-
-docker-compose.yml → Orquestación de contenedores (PostgreSQL + pgAdmin)
-
-schema_postgres.sql → Script SQL que crea todas las tablas de sensores y métricas
-
-mongo-init.js → Archivo de inicialización de MongoDB (Solo para el compañero encargado de NoSQL, por eso esta comentado)
-
-test_postgres.py → Script de prueba para validar conexión, insert, select y delete
-
-info.txt → Este documento con instrucciones
-
-1. REQUISITOS PREVIOS
-
-Antes de comenzar, instala:
-
-Docker Desktop
-
-Python 3.10+
-
-Librerías necesarias
-
-Abrir una terminal en esta carpeta y ejecutar:
-
-python -m pip install psycopg2-binary
-
-2. COMO LEVANTAR LOS CONTENEDORES (PostgreSQL y pgAdmin)
-
-Abrir PowerShell dentro de esta carpeta:
-
-PRACTICA 3/Emergentes_BigData/BaseDeDatos_Equipo3/
-
-Y ejecutar:
-
-docker compose up -d
-
-Esto levantará:
-
-postgres_iot → Base de datos PostgreSQL con el puerto 5432 abierto (OJOOO, SI TIENES POSGRE LOCAL INSTALADO DEBES DETENERLO)
-
-pgadmin_iot → Panel web para administrar PostgreSQL (puerto 5050)
-
-El número de puertos está definido en docker-compose.yml.
-
-3. ACCEDER AL PDADMIN (si quieres)
-
-Después de levantar los contenedores, abrir en el navegador:
-
-http://localhost:5050
-
-
-Credenciales configuradas en docker-compose:
-
-Email: admin@iot.com
-
-Password: admin123
-
-Luego, registrar un servidor:
-
-Host: postgres_iot
-
-User: postgres
-
-Password: postgres (o lo que quieras)
-
-Database: sensores_iot
-
-Esto permite administrar las tablas visualmente.
-
-4. LA BDD SE CREA AUTOMATICAMENTE 
-
-El archivo:
-
-schema_postgres.sql
-
-
-se ejecuta automáticamente cuando el contenedor postgres_iot se inicia por primera vez.
-
-Esto crea todas las tablas:
-
-sensor
-
-telemetria
-
-sensor_aire
-
-sensor_sonido
-
-sensor_soterrado
-
-metricas_aire
-
-metricas_sonido
-
-metricas_soterrado
-
-correlaciones_globales
-
-No es necesario ejecutar nada manualmente.
-
-5. PROBAR LA CONEXION CON PYTHON (OJOOOO PA ESTA PRUEBA SI TIENES POSTGRE INSTALADO EN TU PC DEBES DETENERLO DESDE LOS SERVICIOS)
-
-Ejecutar:
-
-python test_postgres.py
-
-
-Si todo está correcto verás:
-
-Conexión exitosa
-
-Inserción de un sensor temporal
-
-Consulta del registro
-
-Eliminación del registro
-
-Cierre de conexión
-
-Esto confirma que PostgreSQL funciona correctamente dentro del entorno del proyecto.
-
-6. DETENER LOS CONTENEDORES
-
-Para apagarlos:
-
-docker compose down
-
-
-Los datos quedan guardados gracias al volumen:
-
-pgdata:/var/lib/postgresql/data
-
-7. SI QUIERES EJECUTARLO DE NUEVO DESPUES DE APAGAR TU PC O REINICIARLO
-
-Si reinicias o cierras Docker Desktop, para levantar el proyecto solo ejecuta:
-
-docker compose up -d
-
-8. SOPORTE PARA MONGO
-
-MongoDB está incluido en docker-compose.yml, pero está comentado, porque pertenece al encargado del módulo NoSQL.
-
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import *
+import psycopg2
+from psycopg2 import sql
+from pymongo import MongoClient
+from datetime import datetime
+import traceback
+from bson.objectid import ObjectId
+# =======================================================
+# ESQUEMA PARA TODOS LOS SENSORES
+# =======================================================
+schema = StructType([
+    StructField("time", StringType()),
+    StructField("deviceInfo", StructType([
+        StructField("deviceName", StringType())
+    ])),
+    StructField("object", StructType([
+        StructField("temperature", DoubleType()),
+        StructField("humidity", DoubleType()),
+        StructField("co2", DoubleType()),
+        StructField("pressure", DoubleType()),
+        StructField("laeq", DoubleType()),
+        StructField("lai", DoubleType()),
+        StructField("laiMax", DoubleType()),
+        StructField("battery", DoubleType()),
+        StructField("status", StringType()),
+        StructField("vibration", DoubleType()),
+        StructField("moisture", DoubleType()),
+        StructField("methane", DoubleType())
+    ])),
+])
+
+
+# SESIÓN SPARK  
+
+spark = SparkSession.builder.appName("KafkaConsumer").getOrCreate()
+
+
+# LECTURA DESDE KAFKA  
+
+raw = spark.readStream.format("kafka") \
+    .option("kafka.bootstrap.servers", "kafka:9092") \
+    .option("subscribe", "datos_soterrado,datos_sonido,datos_calidad_aire") \
+    .option("startingOffsets", "latest") \
+    .load()
+
+# 1) JSON en string
+raw_json = raw.selectExpr("CAST(value AS STRING) AS raw_json")
+
+# 2) Parseo del JSON
+parsed = raw_json.select(from_json(col("raw_json"), schema).alias("data"))
+
+# 3) Selección limpia
+clean = parsed.select(
+    "data.time",
+    "data.deviceInfo",
+    "data.object"
+)
+
+
+# FUNCIONES PARA INSERTAR EN BDs 
+
+PG_HOST = "postgres_iot"
+PG_PORT = 5432
+PG_DB = "SensoresIoT"
+PG_USER = "postgres"
+PG_PASS = "12345"
+
+MONGO_HOST = "mongo_iot"
+MONGO_PORT = 27017
+MONGO_DB = "sensores_iot"
+
+
+def detect_sensor_type(device_name: str):
+    if not device_name:
+        return None
+    d = device_name.lower()
+    if d.startswith("sensor_aire"):
+        return "aire"
+    if d.startswith("sensor_sonido"):
+        return "sonido"
+    if d.startswith("sensor_soterrado"):
+        return "soterrado"
+    return None
+
+
+def ensure_sensor_pg(cur, device_name, tipo_sensor):
+    insert_q = """
+        INSERT INTO sensor (device_name, tipo_sensor)
+        VALUES (%s, %s)
+        ON CONFLICT (device_name) DO NOTHING
+        RETURNING sensor_id;
+    """
+    cur.execute(insert_q, (device_name, tipo_sensor))
+    row = cur.fetchone()
+
+    if row is not None:
+        return row[0]
+
+    cur.execute("SELECT sensor_id FROM sensor WHERE device_name = %s;", (device_name,))
+    return cur.fetchone()[0]
+
+
+def insert_measure_pg(cur, tipo, sensor_id, fecha_hora, obj):
+    if tipo == "aire":
+        cur.execute("""
+            INSERT INTO sensor_aire (sensor_id, fecha_hora, temperature, humidity, co2, pressure)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            sensor_id, fecha_hora,
+            obj.get("temperature"),
+            obj.get("humidity"),
+            obj.get("co2"),
+            obj.get("pressure")
+        ))
+
+    elif tipo == "sonido":
+        cur.execute("""
+            INSERT INTO sensor_sonido (sensor_id, fecha_hora, laeq, lai, laimax, battery, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            sensor_id, fecha_hora,
+            obj.get("laeq"),
+            obj.get("lai"),
+            obj.get("laiMax"),
+            obj.get("battery"),
+            obj.get("status")
+        ))
+
+    elif tipo == "soterrado":
+        cur.execute("""
+            INSERT INTO sensor_soterrado (sensor_id, fecha_hora, vibration, moisture, methane, temperature, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            sensor_id, fecha_hora,
+            obj.get("vibration"),
+            obj.get("moisture"),
+            obj.get("methane"),
+            obj.get("temperature"),
+            obj.get("status")
+        ))
+
+def ensure_sensor_mongo(mongo_db, device_name, sensor_type):
+    existing = mongo_db["sensor"].find_one({"device_name": device_name})
+    if existing:
+        return existing["_id"]
+
+    doc = {
+        "device_name": device_name,
+        "tipo_sensor": sensor_type,
+        "creado_en": datetime.utcnow()
+    }
+    result = mongo_db["sensor"].insert_one(doc)
+    return result.inserted_id
+
+
+def foreach_batch_insert(batch_df, batch_id):
+    if batch_df.rdd.isEmpty():
+        return
+
+    print(f"[Batch {batch_id}] Procesando...")
+
+    # Conexiones
+    pg_conn = psycopg2.connect(
+        host=PG_HOST, port=PG_PORT, dbname=PG_DB,
+        user=PG_USER, password=PG_PASS
+    )
+    pg_conn.autocommit = False
+    pg_cur = pg_conn.cursor()
+
+    mongo_client = MongoClient(MONGO_HOST, MONGO_PORT)
+    mongo_db = mongo_client[MONGO_DB]
+
+    for row in batch_df.toLocalIterator():
+        try:
+            time_str = row["time"]
+            deviceInfo = row["deviceInfo"]
+            obj = row["object"]
+
+            if deviceInfo is None or deviceInfo.deviceName is None:
+                print("Fila ignorada: deviceName NULL")
+                continue
+
+            device_name = deviceInfo.deviceName
+            sensor_type = detect_sensor_type(device_name)
+
+            if sensor_type is None:
+                print("Tipo de sensor desconocido:", device_name)
+                continue
+
+            fecha_hora = datetime.fromisoformat(time_str.split("+")[0])
+
+            obj_dict = {k: getattr(obj, k) for k in obj.__fields__}
+
+            # 1) Crear/obtener sensor en Mongo
+            mongo_sensor_id = ensure_sensor_mongo(mongo_db, device_name, sensor_type.capitalize())
+
+            # 2) Crear/obtener sensor en PostgreSQL
+            pg_sensor_id = ensure_sensor_pg(pg_cur, device_name, sensor_type.capitalize())
+
+            # 3) Insertar medición en PostgreSQL usando INT
+            insert_measure_pg(pg_cur, sensor_type, pg_sensor_id, fecha_hora, obj_dict)
+
+            # 4) Insertar medición en Mongo usando ObjectID
+            mongo_db[f"sensor_{sensor_type}"].insert_one({
+                "sensor_mongo_id": mongo_sensor_id,
+                "sensor_pg_id": pg_sensor_id,
+                "device_name": device_name,
+                "time": time_str,
+                "object": obj_dict
+            })
+
+
+            mongo_db[f"sensor_{sensor_type}"].insert_one({
+                "sensor_id": str(sensor_id),
+                "device_name": device_name,
+                "time": time_str,
+                "object": obj_dict
+            })
+
+        except Exception as e:
+            print("ERROR fila:", e)
+            traceback.print_exc()
+            continue
+
+    pg_conn.commit()
+    pg_conn.close()
+    mongo_client.close()
+
+
+# STREAM HACIA BASES DE DATOS 
+
+stream_to_db = clean.writeStream \
+    .outputMode("append") \
+    .foreachBatch(foreach_batch_insert) \
+    .start()
+
+
+# STREAM ORIGINAL A CONSOLA 
+
+console_stream = clean.writeStream \
+    .outputMode("append") \
+    .format("console") \
+    .option("truncate", "false") \
+    .start()
+
+spark.streams.awaitAnyTermination()

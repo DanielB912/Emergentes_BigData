@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import psycopg2
 from psycopg2 import sql
-
+#esto solo es pruba nada que ver con el modulo
 def main():
     conn = None
     try:
