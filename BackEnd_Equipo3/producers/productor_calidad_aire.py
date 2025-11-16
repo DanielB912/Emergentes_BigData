@@ -28,47 +28,36 @@ def crear_productor():
         logger.error(f"Error conectando con Kafka: {e}")
         return None
 
-# --- Cargar CSV ---
+# --- Cargar datos CSV o generar aleatorios ---
 def cargar_datos():
     if not os.path.exists(DATA_DIRECTORY):
-        logger.warning(f"No se encontró {DATA_DIRECTORY}, usando datos simulados.")
+        logger.warning(f"No se encontró el directorio {DATA_DIRECTORY}. Se usarán datos simulados.")
         return []
 
-    archivos = [
-        os.path.join(DATA_DIRECTORY, f)
-        for f in os.listdir(DATA_DIRECTORY)
-        if f.endswith(".csv")
-    ]
-
+    archivos = [os.path.join(DATA_DIRECTORY, f) for f in os.listdir(DATA_DIRECTORY) if f.endswith(".csv")]
     if not archivos:
-        logger.warning("No hay CSV, usando datos simulados.")
+        logger.warning("No se encontraron CSVs. Se usarán datos simulados.")
         return []
 
     df = pd.concat([pd.read_csv(f) for f in archivos], ignore_index=True)
-
-    # Ajustar tiempo
     df["time"] = pd.to_datetime(df["time"], errors="coerce")
     df = df.sort_values("time").reset_index(drop=True)
     desfase = datetime.now(timezone.utc) - df["time"].iloc[0].replace(tzinfo=timezone.utc)
     df["time"] = df["time"].apply(lambda t: t.replace(tzinfo=timezone.utc) + desfase)
-
     return df.to_dict("records")
 
-# --- Construir mensaje ---
 def construir_mensaje(registro):
     mensaje = {
-        "time": registro.get("time", datetime.now(timezone.utc).isoformat()),
-        "deviceInfo": {"deviceName": registro.get("deviceName", "Sensor_Aire")},
-        "object": {
-            "temperature": float(registro.get("temperature", 0)),
-            "humidity": float(registro.get("humidity", 0)),
-            "co2": float(registro.get("co2", 0)),
-            "pressure": float(registro.get("pressure", 0)),
-        },
+        "time": datetime.now(timezone.utc).isoformat(),
+        "deviceInfo": {"deviceName": registro.get("deviceInfo.deviceName", "Sensor_Aire")},
+        "object": {}
     }
+    for campo in ["object.temperature", "object.humidity", "object.co2", "object.pressure"]:
+        valor = registro.get(campo)
+        if pd.notna(valor):
+            mensaje["object"][campo.split(".")[1]] = float(valor)
     return mensaje
 
-# --- Simulación ---
 def generar_dato_aleatorio():
     return {
         "time": datetime.now(timezone.utc).isoformat(),
@@ -81,12 +70,10 @@ def generar_dato_aleatorio():
         },
     }
 
-# --- Main ---
 def main():
     productor = crear_productor()
     if not productor:
         return
-
     datos = cargar_datos()
     logger.info(f"Iniciando envío al topic {TOPIC_NAME}")
 
@@ -94,16 +81,15 @@ def main():
         while True:
             if not datos:
                 datos = [generar_dato_aleatorio()]
-
             for registro in datos:
                 mensaje = construir_mensaje(registro)
                 productor.send(TOPIC_NAME, value=mensaje)
                 logger.info(f"Enviado: {mensaje}")
+                productor.flush()
                 time.sleep(DELAY_SECONDS)
-
             if not LOOP_DATA:
                 break
-
+            time.sleep(5)
     except KeyboardInterrupt:
         logger.info("Productor detenido por el usuario.")
     finally:
