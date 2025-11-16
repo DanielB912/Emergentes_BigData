@@ -1,38 +1,77 @@
-import React, { useEffect, useState } from "react";
-import { Line, Bar, Scatter } from "react-chartjs-2";
+import React, { useEffect, useState, useRef } from "react";
+import { Line, Bar, Pie, Scatter } from "react-chartjs-2";
 import Papa from "papaparse";
 import { socket } from "../socket";
-import { Chart, registerables } from "chart.js";
-Chart.register(...registerables);
+import SidebarFiltrosAvanzado from "./SidebarFiltrosAvanzado";
+import {
+  Chart,
+  LineElement,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
 
-function AireDashboard() {
+Chart.register(
+  LineElement,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Title,
+  Tooltip,
+  Legend,
+  zoomPlugin
+);
+
+function AireDashboard({ role }) {
   const [data, setData] = useState([]);
+  const [filtros, setFiltros] = useState({
+    desde: new Date(),
+    hasta: new Date(),
+    variable: "temperature",
+    sensor: "todos",
+    chartType: "todos",
+    rangoCO2: "todos", // nuevo filtro para CO₂
+  });
+  const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
+  const [sensores, setSensores] = useState([]);
 
   // --- LECTURA CSV ---
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     Papa.parse(file, {
       header: true,
       dynamicTyping: true,
       complete: (result) => {
-        const parsedData = result.data.map((row) => ({
-          time: new Date().toISOString(),
-          object: {
-            temperature: row.Temperature || row.temperature || Math.random() * 10 + 20,
-            humidity: row.Humidity || row.humidity || Math.random() * 30 + 40,
-            co2: row.CO2 || row.co2 || Math.random() * 1000,
-            pressure: row.Pressure || row.pressure || Math.random() * 10 + 1010,
-          },
-        }));
-        setData(parsedData);
+        const parsed = result.data
+          .filter((row) => row["deviceInfo.deviceName"])
+          .map((row) => ({
+            device: row["deviceInfo.deviceName"],
+            time: row.time || new Date().toISOString(),
+            object: {
+              temperature: row.temperature || Math.random() * 10 + 20,
+              humidity: row.humidity || Math.random() * 30 + 40,
+              co2: row.co2 || Math.random() * 300 + 400,
+              pressure: row.pressure || Math.random() * 20 + 1000,
+            },
+          }));
+        setData(parsed);
+        setSensores([...new Set(parsed.map((d) => d.device))]);
         setSource("CSV");
       },
     });
   };
 
+  // --- DATOS SIMULADOS / SOCKET ---
   useEffect(() => {
     let interval;
     try {
@@ -40,93 +79,214 @@ function AireDashboard() {
         setData((prev) => [...prev.slice(-99), dato]);
         setSource("Tiempo Real");
       });
-
       interval = setInterval(() => {
         if (source === "Simulado") {
-          const simulacion = {
+          const simul = {
+            device: "CO2-" + Math.floor(1000 + Math.random() * 9000),
             time: new Date().toISOString(),
             object: {
-              temperature: (20 + Math.random() * 8).toFixed(2),
+              temperature: (20 + Math.random() * 10).toFixed(2),
               humidity: (40 + Math.random() * 30).toFixed(2),
-              co2: (400 + Math.random() * 500).toFixed(0),
-              pressure: (1010 + Math.random() * 15).toFixed(2),
+              co2: (400 + Math.random() * 200).toFixed(2),
+              pressure: (1000 + Math.random() * 30).toFixed(2),
             },
           };
-          setData((prev) => [...prev.slice(-99), simulacion]);
+          setData((prev) => [...prev.slice(-99), simul]);
+          if (!sensores.includes(simul.device))
+            setSensores((prev) => [...new Set([...prev, simul.device])]);
         }
-      }, 1000);
-    } catch (err) {
-      console.warn("⚠️ Sin conexión al backend, usando datos simulados...");
+      }, 1500);
+    } catch {
+      console.warn("⚠️ Sin conexión al backend, usando simulación...");
     }
-
     return () => {
       socket.off("nuevoDatoAire");
       clearInterval(interval);
     };
   }, [source]);
 
-  const labels = data.map((d) => new Date(d.time).toLocaleTimeString());
+  // === FILTROS ===
+  const datosFiltrados = data.filter((d) => {
+    if (filtros.sensor !== "todos" && d.device !== filtros.sensor) return false;
 
-  const tempHum = {
+    // Nuevo filtro para rango de CO₂
+    if (filtros.rangoCO2 !== "todos") {
+      const c = parseFloat(d.object.co2);
+      if (filtros.rangoCO2 === "bajo" && c >= 500) return false;
+      if (filtros.rangoCO2 === "medio" && (c < 500 || c > 600)) return false;
+      if (filtros.rangoCO2 === "alto" && c <= 600) return false;
+    }
+
+    return true;
+  });
+
+  const labels = datosFiltrados.map((d) =>
+    new Date(d.time).toLocaleTimeString()
+  );
+
+  // === DATASETS ===
+  const tempTrend = {
     labels,
-    datasets: [
-      { label: "Temperatura (°C)", data: data.map((d) => d.object.temperature), borderColor: "tomato", fill: false },
-      { label: "Humedad (%)", data: data.map((d) => d.object.humidity), borderColor: "skyblue", fill: false },
-    ],
+    datasets:
+      filtros.sensor === "todos"
+        ? sensores.map((s, i) => ({
+            label: `Temp (${s})`,
+            data: datosFiltrados
+              .filter((d) => d.device === s)
+              .map((d) => d.object.temperature),
+            borderColor: ["#ffb74d", "#42a5f5", "#ab47bc", "#66fcf1"][i % 4],
+            tension: 0.4,
+          }))
+        : [
+            {
+              label: `Temperatura (${filtros.sensor})`,
+              data: datosFiltrados.map((d) => d.object.temperature),
+              borderColor: "#ffb74d",
+              tension: 0.4,
+            },
+          ],
   };
 
-  const co2Data = {
+  const co2Pressure = {
     labels,
-    datasets: [
-      { label: "CO₂ (ppm)", data: data.map((d) => d.object.co2), borderColor: "limegreen", fill: false },
-    ],
-  };
-
-  const histData = {
-    labels: Array.from({ length: 10 }, (_, i) => `Lote ${i + 1}`),
-    datasets: [{ label: "Presión (hPa)", data: data.slice(0, 10).map((d) => d.object.pressure), backgroundColor: "slateblue" }],
-  };
-
-  const scatterData = {
     datasets: [
       {
-        label: "Humedad vs Temperatura",
-        data: data.map((d) => ({ x: d.object.humidity, y: d.object.temperature })),
-        backgroundColor: "#ffb74d",
+        label: "CO₂ (ppm)",
+        data: datosFiltrados.map((d) => d.object.co2),
+        borderColor: "#66fcf1",
+        tension: 0.4,
+      },
+      {
+        label: "Presión (hPa)",
+        data: datosFiltrados.map((d) => d.object.pressure),
+        borderColor: "#9ccc65",
+        tension: 0.4,
       },
     ],
   };
 
-  const corrData = {
-    labels: ["Temp", "Humedad", "CO₂", "Presión"],
+  const tempHist = {
+    labels: ["15-20", "20-25", "25-30", "30-35"],
     datasets: [
-      { label: "Correlaciones simuladas", data: [0.8, -0.2, 0.65, 0.1], backgroundColor: ["#ff6666", "#66ccff", "#33cc33", "#cccc33"] },
+      {
+        label: "Frecuencia Temp",
+        data: [3, 8, 10, 6],
+        backgroundColor: "#ffa600",
+      },
     ],
   };
 
-  const avgData = {
-    labels: ["Sensor 1", "Sensor 2", "Sensor 3"],
+  const pieCO2 = {
+    labels: ["Bajo (400-500 ppm)", "Medio (500-600 ppm)", "Alto (600-700 ppm)"],
     datasets: [
-      { label: "Temperatura promedio (°C)", data: [21, 23, 22], backgroundColor: "#ff7043" },
+      {
+        data: [
+          datosFiltrados.filter((d) => d.object.co2 < 500).length,
+          datosFiltrados.filter(
+            (d) => d.object.co2 >= 500 && d.object.co2 <= 600
+          ).length,
+          datosFiltrados.filter((d) => d.object.co2 > 600).length,
+        ],
+        backgroundColor: ["#66fcf1", "#ffa600", "#ff5252"],
+      },
     ],
   };
+
+  const scatterTH = {
+    datasets: [
+      {
+        label: "Temp vs Humedad",
+        data: datosFiltrados.map((d) => ({
+          x: d.object.temperature,
+          y: d.object.humidity,
+        })),
+        backgroundColor: "#45d5c1",
+      },
+    ],
+  };
+
+  const avgSummary = {
+    labels: sensores,
+    datasets: [
+      {
+        label: "Promedio Temp",
+        data: sensores.map(
+          (s) =>
+            datosFiltrados
+              .filter((d) => d.device === s)
+              .reduce((sum, d) => sum + parseFloat(d.object.temperature || 0), 0) /
+            (datosFiltrados.filter((d) => d.device === s).length || 1)
+        ),
+        backgroundColor: "#64ffda",
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      title: { display: true, text: "Análisis Sensor Aire" },
+      zoom: {
+        zoom: { wheel: { enabled: true }, mode: "x" },
+        pan: { enabled: true, mode: "x" },
+      },
+      legend: { position: "top" },
+    },
+  };
+
+  // === ORDEN DINÁMICO DE GRÁFICOS ===
+  const todosLosGraficos = [
+    { tipo: "line", componente: <Line ref={chartRef} data={tempTrend} options={options} /> },
+    { tipo: "line", componente: <Line data={co2Pressure} options={options} /> },
+    { tipo: "bar", componente: <Bar data={tempHist} options={options} /> },
+    { tipo: "pie", componente: <Pie data={pieCO2} options={options} /> },
+    { tipo: "scatter", componente: <Scatter data={scatterTH} options={options} /> },
+    { tipo: "bar", componente: <Bar data={avgSummary} options={options} /> },
+  ];
+
+  const graficosFiltrados =
+    filtros.chartType === "todos"
+      ? todosLosGraficos
+      : [
+          ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
+          ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
+        ];
 
   return (
-    <div className="dashboard">
-      <h2>🌫️ Sensor de Calidad del Aire</h2>
-      <p style={{ color: "gray" }}>🔁 Fuente actual: {source}</p>
-      <input type="file" accept=".csv" onChange={handleFileUpload} style={{ margin: "10px 0" }} />
+    <div style={{ display: "flex", gap: "20px" }}>
+      {role === "ejecutivo" && (
+        <SidebarFiltrosAvanzado
+          filtros={filtros}
+          setFiltros={setFiltros}
+          sensores={sensores}
+          role={role}
+          onResetZoom={() => chartRef.current?.resetZoom()}
+        />
+      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", marginTop: "20px" }}>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Line data={tempHum} /></div>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Line data={co2Data} /></div>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Bar data={histData} /></div>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Scatter data={scatterData} /></div>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Bar data={corrData} /></div>
-        <div style={{ backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 }}><Bar data={avgData} /></div>
+      <div style={{ flex: 1 }}>
+        <h2>🌫️ Sensor de Aire</h2>
+        <p style={{ color: "gray" }}>🔁 Fuente: {source}</p>
+        <input type="file" accept=".csv" onChange={handleFileUpload} />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "25px",
+            marginTop: "20px",
+          }}
+        >
+          {graficosFiltrados.map((g, i) => (
+            <div key={i} style={card}>
+              {g.componente}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
+const card = { backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 };
 export default AireDashboard;
