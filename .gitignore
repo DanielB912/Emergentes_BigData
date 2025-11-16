@@ -1,54 +1,8 @@
-# ===============================
-# ARCHIVOS GENERALES Y TEMPORALES
-# ===============================
-*.log
-*.tmp
-*.bak
-*.swp
-.DS_Store
-Thumbs.db
-
-# ===============================
-# ENTORNOS NODE / REACT
-# ===============================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.cache/
-dist/
-build/
-.env
-.env.local
-.env.development
-.env.production
-
-# ===============================
-# VISUAL STUDIO CODE
-# ===============================
-.vscode/
-.history/
-*.code-workspace
-
-# ===============================
-# PYTHON
-# ===============================
+# Python & Spark cache
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-*.pdb
-*.egg-info/
-.env/
-.venv/
-ENV/
-venv/
-
-# ===============================
-# OTRAS CARPETAS TEMPORALES
-# ===============================
-*.sqlite3
-*.db
-logs/
-uploads/
-media/
+.env
+spark-warehouse/
+**/checkpoint*/
+**/checkpoints*/
+Procesamiento/spark/inbox/

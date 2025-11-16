@@ -49,14 +49,16 @@ def cargar_datos():
 # --- Construir mensaje para Kafka ---
 def construir_mensaje(registro):
     mensaje = {
-        "time": datetime.now(timezone.utc).isoformat(),
-        "deviceInfo": {"deviceName": registro.get("deviceInfo.deviceName", "Sensor_Soterrado")},
-        "object": {}
+        "time": registro.get("time", datetime.now(timezone.utc).isoformat()),
+        "deviceInfo": {"deviceName": registro.get("deviceName", "Sensor_Soterrado")},
+        "object": {
+            "vibration": float(registro.get("vibration", 0)),
+            "moisture": float(registro.get("moisture", 0)),
+            "methane": float(registro.get("methane", 0)),
+            "temperature": float(registro.get("temperature", 0)),
+            "status": registro.get("status", "OK"),
+        },
     }
-    for campo in ["object.vibration", "object.moisture", "object.methane", "object.temperature", "object.status"]:
-        valor = registro.get(campo)
-        if pd.notna(valor):
-            mensaje["object"][campo.split(".")[1]] = valor
     return mensaje
 
 # --- Generar datos aleatorios (simulados) ---
