@@ -43,44 +43,42 @@ function SoterradoDashboard({ role }) {
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
 
-  // --- LECTURA CSV ---
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    Papa.parse(file, {
+  const handleFileUpload = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    Papa.parse(f, {
       header: true,
       dynamicTyping: true,
-      complete: (result) => {
-        const parsed = result.data
-          .filter((row) => row["deviceInfo.deviceName"])
-          .map((row) => ({
-            device: row["deviceInfo.deviceName"],
-            time: row.time || new Date().toISOString(),
+      complete: (r) => {
+        const parsed = r.data
+          .filter((x) => x["deviceInfo.deviceName"])
+          .map((x) => ({
+            device: x["deviceInfo.deviceName"],
+            time: x.time || new Date().toISOString(),
             object: {
-              vibration: row.vibration || Math.random() * 100,
-              moisture: row.moisture || Math.random() * 30 + 40,
-              methane: row.methane || Math.random() * 10,
-              temperature: row.temperature || Math.random() * 10 + 20,
+              vibration: x.vibration || Math.random() * 100,
+              moisture: x.moisture || Math.random() * 30 + 40,
+              methane: x.methane || Math.random() * 10,
+              temperature: x.temperature || Math.random() * 10 + 20,
             },
           }));
         setData(parsed);
-        setSource("CSV");
         setSensores([...new Set(parsed.map((d) => d.device))]);
+        setSource("CSV");
       },
     });
   };
 
-  // --- DATOS SIMULADOS O SOCKET ---
   useEffect(() => {
-    let interval;
+    let i;
     try {
-      socket.on("nuevoDatoSoterrado", (dato) => {
-        setData((prev) => [...prev.slice(-99), dato]);
+      socket.on("nuevoDatoSoterrado", (d) => {
+        setData((p) => [...p.slice(-99), d]);
         setSource("Tiempo Real");
       });
-      interval = setInterval(() => {
+      i = setInterval(() => {
         if (source === "Simulado") {
-          const simul = {
+          const s = {
             device: "EM310-" + Math.floor(900 + Math.random() * 99),
             time: new Date().toISOString(),
             object: {
@@ -90,205 +88,106 @@ function SoterradoDashboard({ role }) {
               temperature: (15 + Math.random() * 10).toFixed(2),
             },
           };
-          setData((prev) => [...prev.slice(-99), simul]);
-          if (!sensores.includes(simul.device))
-            setSensores((prev) => [...new Set([...prev, simul.device])]);
+          setData((p) => [...p.slice(-99), s]);
+          if (!sensores.includes(s.device))
+            setSensores((p) => [...new Set([...p, s.device])]);
         }
       }, 1500);
     } catch {
-      console.warn("⚠️ Sin conexión al backend, simulando...");
+      console.warn("Simulando...");
     }
     return () => {
       socket.off("nuevoDatoSoterrado");
-      clearInterval(interval);
+      clearInterval(i);
     };
   }, [source]);
 
-  // === FILTROS ===
-  const datosFiltrados =
-    filtros.sensor === "todos"
-      ? data
-      : data.filter((d) => d.device === filtros.sensor);
+  const datos = filtros.sensor === "todos" ? data : data.filter((d) => d.device === filtros.sensor);
+  const labels = datos.map((d) => new Date(d.time).toLocaleTimeString());
 
-  const labels = datosFiltrados.map((d) =>
-    new Date(d.time).toLocaleTimeString()
-  );
-
-  // === DATASETS ===
   const vibTrend = {
     labels,
-    datasets:
-      filtros.sensor === "todos"
-        ? sensores.map((s, i) => ({
-            label: `Vibración (${s})`,
-            data: datosFiltrados
-              .filter((d) => d.device === s)
-              .map((d) => d.object.vibration),
-            borderColor: ["#64ffda", "#ffa600", "#42a5f5", "#ff5252", "#ab47bc"][
-              i % 5
-            ],
-            tension: 0.4,
-            fill: false,
-          }))
-        : [
-            {
-              label: `Vibración (${filtros.sensor})`,
-              data: datosFiltrados.map((d) => d.object.vibration),
-              borderColor: "#64ffda",
-              tension: 0.4,
-              fill: false,
-            },
-          ],
-  };
-
-  const humedadTemp = {
-    labels,
     datasets: [
-      {
-        label: "Humedad Suelo (%)",
-        data: datosFiltrados.map((d) => d.object.moisture),
-        borderColor: "#42a5f5",
-        tension: 0.4,
-        fill: false,
-      },
-      {
-        label: "Temp Suelo (°C)",
-        data: datosFiltrados.map((d) => d.object.temperature),
-        borderColor: "#ffa600",
-        tension: 0.4,
-        fill: false,
-      },
+      { label: "Vibración (%)", data: datos.map((d) => d.object.vibration), borderColor: "#64ffda" },
+      { label: "Temperatura (°C)", data: datos.map((d) => d.object.temperature), borderColor: "#ffa600" },
     ],
   };
 
-  const histVibration = {
-    labels: ["0-20", "20-40", "40-60", "60-80", "80-100"],
+  const avgVib = {
+    labels: sensores,
     datasets: [
       {
-        label: "Frecuencia Vibración",
-        data: [3, 8, 10, 7, 4],
-        backgroundColor: "#64ffda",
+        label: "Promedio Vibración (%)",
+        data: sensores.map(
+          (s) =>
+            datos
+              .filter((d) => d.device === s)
+              .reduce((sum, d) => sum + parseFloat(d.object.vibration || 0), 0) /
+            (datos.filter((d) => d.device === s).length || 1)
+        ),
+        backgroundColor: "#26c6da",
       },
     ],
   };
 
   const pieMethane = {
-    labels: ["Bajo (0-3 ppm)", "Medio (3-6 ppm)", "Alto (6-10 ppm)"],
+    labels: ["Bajo (0-3ppm)", "Medio (3-6ppm)", "Alto (>6ppm)"],
     datasets: [
       {
-        label: "Metano",
         data: [
-          datosFiltrados.filter((d) => d.object.methane < 3).length,
-          datosFiltrados.filter(
-            (d) => d.object.methane >= 3 && d.object.methane <= 6
-          ).length,
-          datosFiltrados.filter((d) => d.object.methane > 6).length,
+          datos.filter((d) => d.object.methane < 3).length,
+          datos.filter((d) => d.object.methane >= 3 && d.object.methane <= 6).length,
+          datos.filter((d) => d.object.methane > 6).length,
         ],
         backgroundColor: ["#42a5f5", "#ffa600", "#ff5252"],
       },
     ],
   };
 
-  const scatterVM = {
+  const controlVib = {
+    labels,
+    datasets: [
+      { label: "Vibración (%)", data: datos.map((d) => d.object.vibration), borderColor: "#64ffda", tension: 0.3 },
+      { label: "Límite Superior (80%)", data: new Array(labels.length).fill(80), borderColor: "#ff5252", borderDash: [6, 6] },
+      { label: "Límite Inferior (20%)", data: new Array(labels.length).fill(20), borderColor: "#9ccc65", borderDash: [6, 6] },
+    ],
+  };
+
+  const scatterVH = {
     datasets: [
       {
-        label: "Vibración vs Metano",
-        data: datosFiltrados.map((d) => ({
-          x: d.object.vibration,
-          y: d.object.methane,
-        })),
-        backgroundColor: "#ffa600",
+        label: "Vibración vs Humedad",
+        data: datos.map((d) => ({ x: d.object.vibration, y: d.object.moisture })),
+        backgroundColor: "#ab47bc",
       },
     ],
   };
 
-  const corrScatter = {
-    datasets: [
-      {
-        label: "Humedad vs Temperatura",
-        data: datosFiltrados.map((d) => ({
-          x: d.object.moisture,
-          y: d.object.temperature,
-        })),
-        backgroundColor: "#64ffda",
-      },
-    ],
-  };
-
-  const avgSummary = {
-    labels: sensores,
-    datasets: [
-      {
-        label: "Promedio Vibración",
-        data: sensores.map(
-          (s) =>
-            datosFiltrados
-              .filter((d) => d.device === s)
-              .reduce((sum, d) => sum + parseFloat(d.object.vibration || 0), 0) /
-            (datosFiltrados.filter((d) => d.device === s).length || 1)
-        ),
-        backgroundColor: "#45d5c1",
-      },
-    ],
-  };
-
-  const options = {
+  const baseOpt = (t, x, y) => ({
     responsive: true,
-    plugins: {
-      title: { display: true, text: "Análisis Sensor Soterrado" },
-      zoom: {
-        zoom: { wheel: { enabled: true }, mode: "x" },
-        pan: { enabled: true, mode: "x" },
-      },
-      legend: { position: "top" },
-    },
-  };
+    plugins: { title: { display: true, text: t, color: "#fff" }, legend: { labels: { color: "#ccc" } } },
+    scales: { x: { title: { display: true, text: x, color: "#ccc" } }, y: { title: { display: true, text: y, color: "#ccc" } } },
+  });
 
-  // === ORDEN DINÁMICO DE GRÁFICOS ===
-  const todosLosGraficos = [
-    { tipo: "line", componente: <Line ref={chartRef} data={vibTrend} options={options} /> },
-    { tipo: "line", componente: <Line data={humedadTemp} options={options} /> },
-    { tipo: "bar", componente: <Bar data={histVibration} options={options} /> },
-    { tipo: "pie", componente: <Pie data={pieMethane} options={options} /> },
-    { tipo: "scatter", componente: <Scatter data={scatterVM} options={options} /> },
-    { tipo: "scatter", componente: <Scatter data={corrScatter} options={options} /> },
-    { tipo: "bar", componente: <Bar data={avgSummary} options={options} /> },
+  const grafs = [
+    { tipo: "line", componente: <Line data={vibTrend} options={baseOpt("Evolución de Vibración y Temperatura", "Tiempo", "Valor")} /> },
+    { tipo: "bar", componente: <Bar data={avgVib} options={baseOpt("Promedio de Vibración por Sensor", "Sensor", "%")} /> },
+    { tipo: "pie", componente: <Pie data={pieMethane} options={baseOpt("Distribución de Niveles de Metano", "", "")} /> },
+    { tipo: "line", componente: <Line data={controlVib} options={baseOpt("Gráfico de Control (6σ) de Vibración", "Tiempo", "%")} /> },
+    { tipo: "scatter", componente: <Scatter data={scatterVH} options={baseOpt("Relación entre Vibración y Humedad", "Vibración (%)", "Humedad (%)")} /> },
   ];
-
-  const graficosFiltrados =
-    filtros.chartType === "todos"
-      ? todosLosGraficos
-      : [
-          ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
-          ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
-        ];
 
   return (
     <div style={{ display: "flex", gap: "20px" }}>
       {role === "ejecutivo" && (
-        <SidebarFiltrosAvanzado
-          filtros={filtros}
-          setFiltros={setFiltros}
-          sensores={sensores}
-          role={role}
-          onResetZoom={() => chartRef.current?.resetZoom()}
-        />
+        <SidebarFiltrosAvanzado filtros={filtros} setFiltros={setFiltros} sensores={sensores} role={role} onResetZoom={() => chartRef.current?.resetZoom()} />
       )}
-
       <div style={{ flex: 1 }}>
         <h2>🌍 Sensor Soterrado</h2>
-        <p style={{ color: "gray" }}>🔁 Fuente: {source}</p>
+        <p style={{ color: "gray" }}>Fuente: {source}</p>
         <input type="file" accept=".csv" onChange={handleFileUpload} />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "25px",
-            marginTop: "20px",
-          }}
-        >
-          {graficosFiltrados.map((g, i) => (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", marginTop: "20px" }}>
+          {grafs.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
             </div>
@@ -298,6 +197,5 @@ function SoterradoDashboard({ role }) {
     </div>
   );
 }
-
 const card = { backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 };
 export default SoterradoDashboard;
