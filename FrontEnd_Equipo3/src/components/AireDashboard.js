@@ -29,8 +29,12 @@ Chart.register(
   Legend,
   zoomPlugin
 );
+
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+
+// 🔥 NUEVO: Importar Pantalla Completa
+import FullScreenChart from "./FullScreenChart";
 
 function AireDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -44,6 +48,17 @@ function AireDashboard({ role }) {
   const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
+
+  // ⭐⭐⭐ NUEVO: Estado de pantalla completa ⭐⭐⭐
+  const [fullscreenChart, setFullscreenChart] = useState(null);
+
+  const openFullScreen = (chart) => {
+    setFullscreenChart(chart);
+  };
+
+  const closeFullScreen = () => {
+    setFullscreenChart(null);
+  };
 
   // === LECTURA CSV ===
   const handleFileUpload = (event) => {
@@ -229,8 +244,6 @@ function AireDashboard({ role }) {
     { tipo: "scatter", componente: <Scatter data={scatterTH} options={baseOptions("Relación entre Temperatura y Humedad", "Temperatura (°C)", "Humedad (%)")} /> },
   ];
 
-
-
   const exportToExcel = (index) => {
     const chart = charts[index];
     const chartData = chart.componente.props.data;
@@ -241,8 +254,6 @@ function AireDashboard({ role }) {
     const labels = chartData.labels || [];
     const datasets = chartData.datasets || [];
 
-    //DETECCIÓN AUTOMÁTICA DEL TIPO DE GRÁFICO
-    // Si los datasets contienen puntos con {x, y}, es un scatter.
     const isScatter =
       datasets.length > 0 &&
       Array.isArray(datasets[0].data) &&
@@ -250,9 +261,6 @@ function AireDashboard({ role }) {
       datasets[0].data[0] !== null &&
       "x" in datasets[0].data[0] &&
       "y" in datasets[0].data[0];
-
-
-    //GRÁFICOS NORMALES (LINE, BAR, PIE…)
 
     if (!isScatter) {
       headers = ["Label", ...datasets.map((d) => d.label)];
@@ -262,19 +270,14 @@ function AireDashboard({ role }) {
         datasets.forEach((d) => row.push(d.data[i] ?? ""));
         return row;
       });
-    }
-    //PA EL GRFICO ESPECIAL SCATTER — Temperatura vs Humedad
-
-    else {
+    } else {
       headers = ["Temperatura (°C)", "Humedad (%)"];
-
       rows = datasets[0].data.map((p) => [p.x, p.y]);
     }
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
-
 
     const now = new Date();
     const formatted =
@@ -293,8 +296,6 @@ function AireDashboard({ role }) {
     XLSX.writeFile(workbook, `grafico_${index + 1}_${formatted}.xlsx`);
   };
 
-
-
   return (
     <div style={{ display: "flex", gap: "20px" }}>
       {role === "ejecutivo" && (
@@ -306,15 +307,34 @@ function AireDashboard({ role }) {
           onResetZoom={() => chartRef.current?.resetZoom()}
         />
       )}
+
       <div style={{ flex: 1 }}>
         <h2>🌫️ Sensor de Aire</h2>
         <p style={{ color: "gray" }}>Fuente: {source}</p>
         <input type="file" accept=".csv" onChange={handleFileUpload} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", marginTop: "20px" }}>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "25px",
+            marginTop: "20px",
+          }}
+        >
           {charts.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
-              <div style={{ display: "flex", justifyContent: "center", marginTop: "15px" }}>
+
+              {/* BOTONES */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginTop: "15px",
+                  gap: "10px",
+                }}
+              >
+                {/* BOTÓN ORIGINAL */}
                 <button
                   onClick={() => exportToExcel(i)}
                   style={{
@@ -329,17 +349,35 @@ function AireDashboard({ role }) {
                 >
                   Descargar Reporte
                 </button>
+
+                {/* ⭐ NUEVO: BOTÓN PANTALLA COMPLETA */}
+                <button
+                  onClick={() => openFullScreen(g.componente)}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#2196f3",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                  }}
+                >
+                  Pantalla Completa
+                </button>
               </div>
             </div>
-
-
           ))}
-
-
         </div>
       </div>
+
+      {/* ⭐⭐⭐ MODAL DE PANTALLA COMPLETA ⭐⭐⭐ */}
+      {fullscreenChart && (
+        <FullScreenChart chart={fullscreenChart} onClose={closeFullScreen} />
+      )}
     </div>
   );
 }
+
 const card = { backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 };
 export default AireDashboard;

@@ -3,6 +3,7 @@ import { Line, Bar, Pie, Scatter } from "react-chartjs-2";
 import Papa from "papaparse";
 import { socket } from "../socket";
 import SidebarFiltrosAvanzado from "./SidebarFiltrosAvanzado";
+import FullScreenChart from "./FullScreenChart"; // ⬅️ AGREGADO
 import {
   Chart,
   LineElement,
@@ -43,6 +44,9 @@ function SonidoDashboard({ role }) {
   const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
+
+  // === NUEVO: Estado para Pantalla Completa ===
+  const [fullscreenChart, setFullscreenChart] = useState(null);
 
   // === LECTURA CSV ===
   const handleFileUpload = (event) => {
@@ -129,33 +133,31 @@ function SonidoDashboard({ role }) {
     datasets:
       filtros.sensor === "todos"
         ? sensores.map((s, i) => ({
-          label: `Nivel de Ruido (${s})`,
-          data: datosFiltrados
-            .filter((d) => d.device === s)
-            .map((d) => d.object.laeq),
-          borderColor: colorSet[i % colorSet.length],
-          tension: 0.4,
-          fill: false,
-        }))
-        : [
-          {
-            label: `Nivel de Ruido (${filtros.sensor})`,
-            data: datosFiltrados.map((d) => d.object.laeq),
-            borderColor: "#ffb74d",
+            label: `Nivel de Ruido (${s})`,
+            data: datosFiltrados
+              .filter((d) => d.device === s)
+              .map((d) => d.object.laeq),
+            borderColor: colorSet[i % colorSet.length],
             tension: 0.4,
-          },
-        ],
+            fill: false,
+          }))
+        : [
+            {
+              label: `Nivel de Ruido (${filtros.sensor})`,
+              data: datosFiltrados.map((d) => d.object.laeq),
+              borderColor: "#ffb74d",
+              tension: 0.4,
+            },
+          ],
   };
 
-  // === 2️⃣ DISTRIBUCIÓN POR SENSOR (tipo Boxplot simulado) ===
+  // === 2️⃣ DISTRIBUCIÓN POR SENSOR ===
   const boxPlotSimulado = {
     labels: sensores,
     datasets: [
       {
         label: "Distribución del Nivel de Sonido por Sensor",
-        data: sensores.map(
-          () => Math.floor(30 + Math.random() * 50) // simulación
-        ),
+        data: sensores.map(() => Math.floor(30 + Math.random() * 50)),
         backgroundColor: colorSet,
       },
     ],
@@ -179,7 +181,7 @@ function SonidoDashboard({ role }) {
     ],
   };
 
-  // === 4️⃣ DISTRIBUCIÓN GENERAL ===
+  // === 4️⃣ HISTOGRAMA ===
   const histNoise = {
     labels: ["50-60", "60-70", "70-80", "80-90", "90+"],
     datasets: [
@@ -191,7 +193,7 @@ function SonidoDashboard({ role }) {
     ],
   };
 
-  // === 5️⃣ CONTROL Y NORMALIDAD ===
+  // === 5️⃣ CONTROL ===
   const controlChart = {
     labels,
     datasets: [
@@ -240,23 +242,20 @@ function SonidoDashboard({ role }) {
     filtros.chartType === "todos"
       ? todosLosGraficos
       : [
-        ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
-        ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
-      ];
- 
-  //  EXPORTAR A EXCEL
+          ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
+          ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
+        ];
+
+  // === EXPORTAR EXCEL ===
   const exportToExcel = (index) => {
     const chart = graficosFiltrados[index];
     if (!chart) return;
 
-    // Obtener labels y datasets
     const labels = chart.componente.props.data.labels || [];
     const datasets = chart.componente.props.data.datasets || [];
 
- 
     const headers = ["Label", ...datasets.map((d) => d.label)];
 
- 
     const rows = labels.map((label, i) => {
       const row = [label];
       datasets.forEach((d) => {
@@ -306,7 +305,28 @@ function SonidoDashboard({ role }) {
             <div key={i} style={card}>
               {g.componente}
 
-              <div style={{ display: "flex", justifyContent: "center", marginTop: "15px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "12px",
+                  marginTop: "15px",
+                }}
+              >
+                <button
+                  onClick={() => setFullscreenChart(g.componente)} // ⬅️ NUEVO
+                  style={{
+                    padding: "8px 12px",
+                    background: "#2196f3",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Pantalla Completa
+                </button>
+
                 <button
                   onClick={() => exportToExcel(i)}
                   style={{
@@ -323,9 +343,13 @@ function SonidoDashboard({ role }) {
               </div>
             </div>
           ))}
-
         </div>
       </div>
+
+      {/* === MODAL DE PANTALLA COMPLETA === */}
+      {fullscreenChart && (
+        <FullScreenChart chart={fullscreenChart} onClose={() => setFullscreenChart(null)} />
+      )}
     </div>
   );
 }
@@ -336,4 +360,5 @@ const card = {
   borderRadius: 10,
   boxShadow: "0 0 10px rgba(0,0,0,0.3)",
 };
+
 export default SonidoDashboard;
