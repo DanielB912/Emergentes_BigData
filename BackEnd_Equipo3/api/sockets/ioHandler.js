@@ -1,44 +1,32 @@
-// backend/api/sockets/ioHandler.js
+// api/sockets/ioHandler.js
+import {
+  getLastAire,
+  getLastSonido,
+  getLastSoterrado,
+} from "../services/pgService.js";
+import { getLastMongo } from "../services/mongoService.js";
+
 export const ioHandler = (io) => {
   console.log("Socket.IO inicializado.");
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     console.log("Nuevo cliente conectado:", socket.id);
 
-    // Enviar datos simulados (aire)
-    setInterval(() => {
-      const datoAire = {
-        time: new Date().toISOString(),
-        object: {
-          temperature: (20 + Math.random() * 10).toFixed(2),
-          humidity: (40 + Math.random() * 30).toFixed(2),
-        },
-      };
-      socket.emit("nuevoDatoAire", datoAire);
+    // Enviar datos cada 2s
+    setInterval(async () => {
+      const aire = await getLastAire();
+      socket.emit("aire", aire);
     }, 2000);
 
-    // Enviar datos simulados (sonido)
-    setInterval(() => {
-      const datoSonido = {
-        time: new Date().toISOString(),
-        object: {
-          laeq: (50 + Math.random() * 40).toFixed(2),
-          laiMax: (70 + Math.random() * 20).toFixed(2),
-        },
-      };
-      socket.emit("nuevoDatoSonido", datoSonido);
-    }, 2500);
+    setInterval(async () => {
+      const sonido = await getLastSonido();
+      socket.emit("sonido", sonido);
+    }, 2000);
 
-    // Enviar datos simulados (soterrado)
-    setInterval(() => {
-      const datoSoterrado = {
-        time: new Date().toISOString(),
-        object: {
-          distance: (Math.random() * 10).toFixed(2),
-        },
-      };
-      socket.emit("nuevoDatoSoterrado", datoSoterrado);
-    }, 3000);
+    setInterval(async () => {
+      const soterrado = await getLastSoterrado();
+      socket.emit("soterrado", soterrado);
+    }, 2000);
 
     socket.on("disconnect", () => {
       console.log("Cliente desconectado:", socket.id);
