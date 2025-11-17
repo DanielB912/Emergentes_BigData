@@ -1,4 +1,7 @@
 pandas
 kafka-python
+<<<<<<< HEAD
 pymongo
 psycopg2-binary
+=======
+>>>>>>> dev
