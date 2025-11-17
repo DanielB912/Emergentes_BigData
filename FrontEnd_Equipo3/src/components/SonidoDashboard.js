@@ -29,6 +29,7 @@ Chart.register(
   Legend,
   zoomPlugin
 );
+import * as XLSX from "xlsx";
 
 function SonidoDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -128,22 +129,22 @@ function SonidoDashboard({ role }) {
     datasets:
       filtros.sensor === "todos"
         ? sensores.map((s, i) => ({
-            label: `Nivel de Ruido (${s})`,
-            data: datosFiltrados
-              .filter((d) => d.device === s)
-              .map((d) => d.object.laeq),
-            borderColor: colorSet[i % colorSet.length],
-            tension: 0.4,
-            fill: false,
-          }))
+          label: `Nivel de Ruido (${s})`,
+          data: datosFiltrados
+            .filter((d) => d.device === s)
+            .map((d) => d.object.laeq),
+          borderColor: colorSet[i % colorSet.length],
+          tension: 0.4,
+          fill: false,
+        }))
         : [
-            {
-              label: `Nivel de Ruido (${filtros.sensor})`,
-              data: datosFiltrados.map((d) => d.object.laeq),
-              borderColor: "#ffb74d",
-              tension: 0.4,
-            },
-          ],
+          {
+            label: `Nivel de Ruido (${filtros.sensor})`,
+            data: datosFiltrados.map((d) => d.object.laeq),
+            borderColor: "#ffb74d",
+            tension: 0.4,
+          },
+        ],
   };
 
   // === 2️⃣ DISTRIBUCIÓN POR SENSOR (tipo Boxplot simulado) ===
@@ -239,9 +240,42 @@ function SonidoDashboard({ role }) {
     filtros.chartType === "todos"
       ? todosLosGraficos
       : [
-          ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
-          ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
-        ];
+        ...todosLosGraficos.filter((g) => g.tipo === filtros.chartType),
+        ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
+      ];
+ 
+  //  EXPORTAR A EXCEL
+  const exportToExcel = (index) => {
+    const chart = graficosFiltrados[index];
+    if (!chart) return;
+
+    // Obtener labels y datasets
+    const labels = chart.componente.props.data.labels || [];
+    const datasets = chart.componente.props.data.datasets || [];
+
+ 
+    const headers = ["Label", ...datasets.map((d) => d.label)];
+
+ 
+    const rows = labels.map((label, i) => {
+      const row = [label];
+      datasets.forEach((d) => {
+        row.push(d.data[i] ?? "");
+      });
+      return row;
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+
+    XLSX.writeFile(
+      workbook,
+      `sonido_grafico_${index + 1}_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.xlsx`
+    );
+  };
 
   return (
     <div style={{ display: "flex", gap: "20px" }}>
@@ -271,8 +305,25 @@ function SonidoDashboard({ role }) {
           {graficosFiltrados.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
+
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "15px" }}>
+                <button
+                  onClick={() => exportToExcel(i)}
+                  style={{
+                    padding: "8px 14px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </div>
             </div>
           ))}
+
         </div>
       </div>
     </div>

@@ -29,6 +29,7 @@ Chart.register(
   Legend,
   zoomPlugin
 );
+import * as XLSX from "xlsx"; // asegúrate de tener esto arriba
 
 function SoterradoDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -177,6 +178,47 @@ function SoterradoDashboard({ role }) {
     { tipo: "scatter", componente: <Scatter data={scatterVH} options={baseOpt("Relación entre Vibración y Humedad", "Vibración (%)", "Humedad (%)")} /> },
   ];
 
+  //pa exportar
+  const exportToExcel = (index) => {
+    const chart = grafs[index];
+    let headers = [];
+    let rows = [];
+
+    const chartData = chart.componente.props.data;
+    const labels = chartData.labels || [];
+    const datasets = chartData.datasets || [];
+
+    if (chart.tipo === "scatter") {
+      headers = ["Vibración (%)", "Humedad (%)"];
+
+      rows = datasets[0].data.map((p) => [
+        p.x,
+        p.y
+      ]);
+    }
+    else {
+      headers = ["Label", ...datasets.map((d) => d.label)];
+
+      rows = labels.map((label, i) => {
+        const row = [label];
+        datasets.forEach((d) => row.push(d.data[i] ?? ""));
+        return row;
+      });
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+
+    XLSX.writeFile(
+      workbook,
+      `grafico_${index + 1}_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.xlsx`
+    );
+  };
+
+
   return (
     <div style={{ display: "flex", gap: "20px" }}>
       {role === "ejecutivo" && (
@@ -189,9 +231,26 @@ function SoterradoDashboard({ role }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", marginTop: "20px" }}>
           {grafs.map((g, i) => (
             <div key={i} style={card}>
-              {g.componente}
+              {g.componente}           
+              <div style={{ textAlign: "center", marginTop: "15px" }}>
+                <button
+                  onClick={() => exportToExcel(i)}
+                  style={{
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 18px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </div>
             </div>
           ))}
+
+
         </div>
       </div>
     </div>

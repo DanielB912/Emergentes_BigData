@@ -29,6 +29,8 @@ Chart.register(
   Legend,
   zoomPlugin
 );
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 function AireDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -227,6 +229,72 @@ function AireDashboard({ role }) {
     { tipo: "scatter", componente: <Scatter data={scatterTH} options={baseOptions("Relación entre Temperatura y Humedad", "Temperatura (°C)", "Humedad (%)")} /> },
   ];
 
+
+
+  const exportToExcel = (index) => {
+    const chart = charts[index];
+    const chartData = chart.componente.props.data;
+
+    let headers = [];
+    let rows = [];
+
+    const labels = chartData.labels || [];
+    const datasets = chartData.datasets || [];
+
+    //DETECCIÓN AUTOMÁTICA DEL TIPO DE GRÁFICO
+    // Si los datasets contienen puntos con {x, y}, es un scatter.
+    const isScatter =
+      datasets.length > 0 &&
+      Array.isArray(datasets[0].data) &&
+      typeof datasets[0].data[0] === "object" &&
+      datasets[0].data[0] !== null &&
+      "x" in datasets[0].data[0] &&
+      "y" in datasets[0].data[0];
+
+
+    //GRÁFICOS NORMALES (LINE, BAR, PIE…)
+
+    if (!isScatter) {
+      headers = ["Label", ...datasets.map((d) => d.label)];
+
+      rows = labels.map((label, i) => {
+        const row = [label];
+        datasets.forEach((d) => row.push(d.data[i] ?? ""));
+        return row;
+      });
+    }
+    //PA EL GRFICO ESPECIAL SCATTER — Temperatura vs Humedad
+
+    else {
+      headers = ["Temperatura (°C)", "Humedad (%)"];
+
+      rows = datasets[0].data.map((p) => [p.x, p.y]);
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+
+
+    const now = new Date();
+    const formatted =
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0") +
+      "_" +
+      String(now.getHours()).padStart(2, "0") +
+      "-" +
+      String(now.getMinutes()).padStart(2, "0") +
+      "-" +
+      String(now.getSeconds()).padStart(2, "0");
+
+    XLSX.writeFile(workbook, `grafico_${index + 1}_${formatted}.xlsx`);
+  };
+
+
+
   return (
     <div style={{ display: "flex", gap: "20px" }}>
       {role === "ejecutivo" && (
@@ -246,8 +314,28 @@ function AireDashboard({ role }) {
           {charts.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "15px" }}>
+                <button
+                  onClick={() => exportToExcel(i)}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#4caf50",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                  }}
+                >
+                  Descargar Reporte
+                </button>
+              </div>
             </div>
+
+
           ))}
+
+
         </div>
       </div>
     </div>
