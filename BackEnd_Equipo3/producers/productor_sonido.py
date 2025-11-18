@@ -4,7 +4,6 @@ import os
 import random
 import time
 from datetime import datetime, timezone
-<<<<<<< HEAD
 import pandas as pd
 from kafka import KafkaProducer
 
@@ -12,22 +11,12 @@ from kafka import KafkaProducer
 KAFKA_BOOTSTRAP = "kafka:9092"
 TOPIC_NAME = "datos_sonido"
 DATA_DIRECTORY = "/app/producers/datos_sensores/sonido"
-=======
-from kafka import KafkaProducer
-import pandas as pd
-
-# --- Configuración ---
-KAFKA_BROKER_URL = os.getenv("KAFKA_BROKER_URL", "localhost:9092")
-TOPIC_NAME = "datos_sonido"
-DATA_DIRECTORY = "datos_sensores/sonido"
->>>>>>> dev
 DELAY_SECONDS = 2
 LOOP_DATA = True
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 logger = logging.getLogger("ProductorSonido")
 
-<<<<<<< HEAD
 # --- Crear productor Kafka ---
 def crear_productor():
     try:
@@ -106,36 +95,10 @@ def generar_dato_aleatorio():
     }
 
 # --- Main ---
-=======
-def crear_productor():
-    try:
-        return KafkaProducer(
-            bootstrap_servers=[KAFKA_BROKER_URL],
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        )
-    except Exception as e:
-        logger.error(f"Error conectando con Kafka: {e}")
-        return None
-
-def generar_dato_aleatorio():
-    return {
-        "time": datetime.now(timezone.utc).isoformat(),
-        "deviceInfo": {"deviceName": f"Sensor_Sonido_{random.randint(1,5)}"},
-        "object": {
-            "laeq": round(random.uniform(40, 95), 2),       # Nivel instantáneo de ruido (dB)
-            "lai": round(random.uniform(30, 80), 2),        # Nivel promedio (dB)
-            "laiMax": round(random.uniform(70, 110), 2),    # Pico máximo (dB)
-            "battery": random.randint(60, 100),             # Nivel batería (%)
-            "status": random.choice(["OK", "HIGH", "CRITICAL"])
-        },
-    }
-
->>>>>>> dev
 def main():
     productor = crear_productor()
     if not productor:
         return
-<<<<<<< HEAD
 
     datos = cargar_datos()
     logger.info(f"🚀 Enviando datos al topic '{TOPIC_NAME}'")
@@ -156,18 +119,6 @@ def main():
 
     except KeyboardInterrupt:
         logger.info("🛑 Productor detenido por el usuario.")
-=======
-    logger.info(f"Iniciando envío de datos al topic {TOPIC_NAME}")
-    try:
-        while True:
-            mensaje = generar_dato_aleatorio()
-            productor.send(TOPIC_NAME, value=mensaje)
-            logger.info(f"Enviado: {mensaje}")
-            productor.flush()
-            time.sleep(DELAY_SECONDS)
-    except KeyboardInterrupt:
-        logger.info("Productor detenido por el usuario.")
->>>>>>> dev
     finally:
         productor.close()
 

@@ -25,7 +25,7 @@ FROM python:3.10-bullseye
 
 # Instalar dependencias de Java (Spark lo necesita)
 RUN apt-get update && apt-get install -y openjdk-17-jdk curl wget procps
-
+RUN pip install pyspark==3.5.0 psycopg2-binary pymongo kafka-python
 # Descargar Spark 3.5.0 desde ARCHIVE (no se borra nunca)
 RUN wget https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3.tgz \
     && tar -xvzf spark-3.5.0-bin-hadoop3.tgz -C /opt \

@@ -208,16 +208,10 @@ def foreach_batch_insert(batch_df, batch_id):
                 "sensor_pg_id": pg_sensor_id,
                 "device_name": device_name,
                 "time": time_str,
-                "object": obj_dict
+                "object": obj_dict,
+                "inserted_at": datetime.utcnow()
             })
 
-
-            mongo_db[f"sensor_{sensor_type}"].insert_one({
-                "sensor_id": str(sensor_id),
-                "device_name": device_name,
-                "time": time_str,
-                "object": obj_dict
-            })
 
         except Exception as e:
             print("ERROR fila:", e)

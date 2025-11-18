@@ -1,6 +1,8 @@
 # BackEnd_Equipo3/Dockerfile.producers
 FROM python:3.11-slim
 
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copiamos solo lo necesario
@@ -12,4 +14,4 @@ COPY ./producers /app/producers
 WORKDIR /app/producers
 
 # Ejecutar TODOS los productores al iniciar el contenedor
-CMD ["bash", "-c", "python productor_calidad_aire.py & python productor_sonido.py & python productor_soterrado.py & tail -f /dev/null"]
+CMD ["bash", "/app/wait-for-kafka.sh"]
