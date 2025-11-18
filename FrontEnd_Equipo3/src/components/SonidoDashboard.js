@@ -76,38 +76,13 @@ function SonidoDashboard({ role }) {
 
   // === DATOS SIMULADOS / SOCKET ===
   useEffect(() => {
-    let interval;
-    try {
-      socket.on("nuevoDatoSonido", (dato) => {
-        setData((prev) => [...prev.slice(-99), dato]);
-        setSource("Tiempo Real");
-      });
+  socket.on("sonido_update", (datoNuevo) => {
+    setData(prev => [...prev, datoNuevo]);
+  });
+  return () => socket.off("sonido_update");
+}, []);
 
-      interval = setInterval(() => {
-        if (source === "Simulado") {
-          const simul = {
-            device: "SLS-" + Math.floor(2600 + Math.random() * 700),
-            time: new Date().toISOString(),
-            object: {
-              laeq: (60 + Math.random() * 20).toFixed(2),
-              laimax: (75 + Math.random() * 20).toFixed(2),
-              battery: (70 + Math.random() * 30).toFixed(2),
-            },
-          };
-          setData((prev) => [...prev.slice(-99), simul]);
-          if (!sensores.includes(simul.device))
-            setSensores((prev) => [...new Set([...prev, simul.device])]);
-        }
-      }, 1500);
-    } catch {
-      console.warn("⚠️ Sin conexión al backend, simulando...");
-    }
 
-    return () => {
-      socket.off("nuevoDatoSonido");
-      clearInterval(interval);
-    };
-  }, [source]);
 
   const datosFiltrados =
     filtros.sensor === "todos"

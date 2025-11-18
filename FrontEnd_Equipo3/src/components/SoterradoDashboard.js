@@ -78,40 +78,13 @@ function SoterradoDashboard({ role }) {
   };
 
   useEffect(() => {
-    let i;
-    try {
-      socket.on("nuevoDatoSoterrado", (d) => {
-        setData((p) => [...p.slice(-99), d]);
-        setSource("Tiempo Real");
-      });
+  socket.on("soterrado_update", (datoNuevo) => {
+    setData(prev => [...prev, datoNuevo]);
+  });
+  return () => socket.off("soterrado_update");
+}, []);
 
-      i = setInterval(() => {
-        if (source === "Simulado") {
-          const s = {
-            device: "EM310-" + Math.floor(900 + Math.random() * 99),
-            time: new Date().toISOString(),
-            object: {
-              vibration: (Math.random() * 100).toFixed(2),
-              moisture: (40 + Math.random() * 30).toFixed(2),
-              methane: (Math.random() * 10).toFixed(2),
-              temperature: (15 + Math.random() * 10).toFixed(2),
-            },
-          };
 
-          setData((p) => [...p.slice(-99), s]);
-          if (!sensores.includes(s.device))
-            setSensores((p) => [...new Set([...p, s.device])]);
-        }
-      }, 1500);
-    } catch {
-      console.warn("Simulando...");
-    }
-
-    return () => {
-      socket.off("nuevoDatoSoterrado");
-      clearInterval(i);
-    };
-  }, [source]);
 
   const datos =
     filtros.sensor === "todos"

@@ -9,7 +9,9 @@ export const pgPool = new Pool({
   password: "12345",
   database: "SensoresIoT",
 });
-
+export async function getPgClient() {
+  return await pgPool.connect();
+}
 // Obtener últimas mediciones
 export async function getLastAire() {
   const res = await pgPool.query(`

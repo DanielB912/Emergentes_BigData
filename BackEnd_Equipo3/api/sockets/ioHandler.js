@@ -1,35 +1,43 @@
-// api/sockets/ioHandler.js
 import {
-  getLastAire,
-  getLastSonido,
-  getLastSoterrado,
-} from "../services/pgService.js";
-import { getLastMongo } from "../services/mongoService.js";
+  getLatestAire,
+  getLatestSonido,
+  getLatestSoterrado
+} from "../services/mongoServices.js";
 
-export const ioHandler = (io) => {
-  console.log("Socket.IO inicializado.");
+export default (io) => {
+  console.log("🔌 Socket.io conectado. Enviando datos cada 2s...");
 
-  io.on("connection", async (socket) => {
-    console.log("Nuevo cliente conectado:", socket.id);
+  const esAireValido = (d) =>
+    d &&
+    d.time &&
+    d.object &&
+    typeof d.object.temperature === "number" &&
+    typeof d.object.humidity === "number";
 
-    // Enviar datos cada 2s
-    setInterval(async () => {
-      const aire = await getLastAire();
-      socket.emit("aire", aire);
-    }, 2000);
+  const esSonidoValido = (d) =>
+    d &&
+    d.time &&
+    d.object &&
+    typeof d.object.laeq === "number";
 
-    setInterval(async () => {
-      const sonido = await getLastSonido();
-      socket.emit("sonido", sonido);
-    }, 2000);
+  const esSoterradoValido = (d) =>
+    d &&
+    d.time &&
+    d.object &&
+    typeof d.object.vibration === "number";
 
-    setInterval(async () => {
-      const soterrado = await getLastSoterrado();
-      socket.emit("soterrado", soterrado);
-    }, 2000);
+  setInterval(async () => {
+    try {
+      const aire = await getLatestAire();
+      const sonido = await getLatestSonido();
+      const soterrado = await getLatestSoterrado();
 
-    socket.on("disconnect", () => {
-      console.log("Cliente desconectado:", socket.id);
-    });
-  });
+      if (esAireValido(aire)) io.emit("aire_update", aire);
+      if (esSonidoValido(sonido)) io.emit("sonido_update", sonido);
+      if (esSoterradoValido(soterrado)) io.emit("soterrado_update", soterrado);
+
+    } catch (err) {
+      console.error("❌ Error enviando datos:", err);
+    }
+  }, 2000);
 };

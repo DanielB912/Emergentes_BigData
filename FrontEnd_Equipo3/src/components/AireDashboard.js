@@ -17,6 +17,7 @@ import {
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 
+
 Chart.register(
   LineElement,
   BarElement,
@@ -87,39 +88,33 @@ function AireDashboard({ role }) {
     });
   };
 
-  // === DATOS SIMULADOS / SOCKET ===
-  useEffect(() => {
-    let interval;
-    try {
-      socket.on("nuevoDatoAire", (dato) => {
-        setData((prev) => [...prev.slice(-99), dato]);
-        setSource("Tiempo Real");
-      });
-      interval = setInterval(() => {
-        if (source === "Simulado") {
-          const simul = {
-            device: "CO2-" + Math.floor(1000 + Math.random() * 9000),
-            time: new Date().toISOString(),
-            object: {
-              temperature: (20 + Math.random() * 10).toFixed(2),
-              humidity: (40 + Math.random() * 30).toFixed(2),
-              co2: (400 + Math.random() * 200).toFixed(2),
-              pressure: (1000 + Math.random() * 30).toFixed(2),
-            },
-          };
-          setData((prev) => [...prev.slice(-99), simul]);
-          if (!sensores.includes(simul.device))
-            setSensores((prev) => [...new Set([...prev, simul.device])]);
-        }
-      }, 1500);
-    } catch {
-      console.warn("Sin conexión al backend, simulando...");
-    }
-    return () => {
-      socket.off("nuevoDatoAire");
-      clearInterval(interval);
-    };
-  }, [source]);
+//   // === DATOS SIMULADOS / SOCKET ===
+//   useEffect(() => {
+//   const fetchData = async () => {
+//     try {
+//       const res = await fetch("http://localhost:4000/api/aire/latest");
+//       const json = await res.json();
+//       setData((prev) => [...prev, json]);
+//     } catch (err) {
+//       console.error("Error cargando Aire:", err);
+//     }
+//   };
+
+//   fetchData();
+//   const interval = setInterval(fetchData, 3000);
+
+//   return () => clearInterval(interval);
+// }, []);
+
+useEffect(() => {
+    socket.on("aire_update", (datoNuevo) => {
+        setData(prev => [...prev, datoNuevo]);
+    });
+
+    return () => socket.off("aire_update");
+}, []);
+
+
 
   // === FILTROS ===
   const datosFiltrados =
@@ -127,28 +122,34 @@ function AireDashboard({ role }) {
       ? data
       : data.filter((d) => d.device === filtros.sensor);
 
-  const labels = datosFiltrados.map((d) =>
-    new Date(d.time).toLocaleTimeString()
-  );
+  const labels = datosFiltrados
+  .filter((d) => d && d.time)   // ⬅️ FILTRA nulos
+  .map((d) => new Date(d.time).toLocaleTimeString());
+
 
   // === 1️⃣ EVOLUCIÓN TEMPERATURA Y HUMEDAD ===
   const tempTrend = {
-    labels,
-    datasets: [
-      {
-        label: "Temperatura (°C)",
-        data: datosFiltrados.map((d) => d.object.temperature),
-        borderColor: "#ffa600",
-        tension: 0.4,
-      },
-      {
-        label: "Humedad (%)",
-        data: datosFiltrados.map((d) => d.object.humidity),
-        borderColor: "#42a5f5",
-        tension: 0.4,
-      },
-    ],
-  };
+  labels,
+  datasets: [
+    {
+      label: "Temperatura (°C)",
+      data: datosFiltrados
+        .filter((d) => d && d.object && d.object.temperature)
+        .map((d) => d.object.temperature),
+      borderColor: "#ffa600",
+      tension: 0.4,
+    },
+    {
+      label: "Humedad (%)",
+      data: datosFiltrados
+        .filter((d) => d && d.object && d.object.humidity)
+        .map((d) => d.object.humidity),
+      borderColor: "#42a5f5",
+      tension: 0.4,
+    },
+  ],
+};
+
 
   // === 2️⃣ PROMEDIO POR SENSOR ===
   const avgTemp = {
