@@ -17,7 +17,6 @@ import {
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 
-
 Chart.register(
   LineElement,
   BarElement,
@@ -33,8 +32,6 @@ Chart.register(
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-
-// 🔥 NUEVO: Importar Pantalla Completa
 import FullScreenChart from "./FullScreenChart";
 
 function AireDashboard({ role }) {
@@ -49,72 +46,81 @@ function AireDashboard({ role }) {
   const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
-
-  // ⭐⭐⭐ NUEVO: Estado de pantalla completa ⭐⭐⭐
   const [fullscreenChart, setFullscreenChart] = useState(null);
 
-  const openFullScreen = (chart) => {
-    setFullscreenChart(chart);
-  };
+  const openFullScreen = (chart) => setFullscreenChart(chart);
+  const closeFullScreen = () => setFullscreenChart(null);
 
-  const closeFullScreen = () => {
-    setFullscreenChart(null);
-  };
-
-  // === LECTURA CSV ===
+  // === LECTURA CSV / XLSX ===
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: true,
-      complete: (result) => {
-        const parsed = result.data
-          .filter((row) => row["deviceInfo.deviceName"])
-          .map((row) => ({
-            device: row["deviceInfo.deviceName"],
-            time: row.time || new Date().toISOString(),
-            object: {
-              temperature: row.temperature || Math.random() * 10 + 20,
-              humidity: row.humidity || Math.random() * 30 + 40,
-              co2: row.co2 || Math.random() * 300 + 400,
-              pressure: row.pressure || Math.random() * 20 + 1000,
-            },
-          }));
+
+    const extension = file.name.split(".").pop().toLowerCase();
+
+    if (extension === "csv") {
+      Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        complete: (result) => {
+          const parsed = result.data
+            .filter((row) => row["deviceInfo.deviceName"] || row.sensor_id)
+            .map((row) => ({
+              device:
+                row["deviceInfo.deviceName"] ||
+                `sensor_aire_${row.sensor_id || 1}`,
+              time: row.time || row.fecha_hora || new Date().toISOString(),
+              object: {
+                temperature: parseFloat(row.temperature) || 0,
+                humidity: parseFloat(row.humidity) || 0,
+                co2: parseFloat(row.co2) || 0,
+                pressure: parseFloat(row.pressure) || 0,
+              },
+            }));
+          setData(parsed);
+          setSensores([...new Set(parsed.map((d) => d.device))]);
+          setSource("Archivo CSV");
+        },
+      });
+    } else if (extension === "xlsx") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const workbook = XLSX.read(e.target.result, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        const parsed = rows.map((row) => ({
+          device: `sensor_aire_${row.sensor_id || 1}`,
+          time: row.fecha_hora || new Date().toISOString(),
+          object: {
+            temperature: parseFloat(row.temperature) || 0,
+            humidity: parseFloat(row.humidity) || 0,
+            co2: parseFloat(row.co2) || 0,
+            pressure: parseFloat(row.pressure) || 0,
+          },
+        }));
+
         setData(parsed);
         setSensores([...new Set(parsed.map((d) => d.device))]);
-        setSource("CSV");
-      },
-    });
+        setSource("Archivo XLSX");
+      };
+      reader.readAsBinaryString(file);
+    } else {
+      alert("Formato no soportado. Usa CSV o XLSX.");
+    }
   };
 
-//   // === DATOS SIMULADOS / SOCKET ===
-//   useEffect(() => {
-//   const fetchData = async () => {
-//     try {
-//       const res = await fetch("http://localhost:4000/api/aire/latest");
-//       const json = await res.json();
-//       setData((prev) => [...prev, json]);
-//     } catch (err) {
-//       console.error("Error cargando Aire:", err);
-//     }
-//   };
-
-//   fetchData();
-//   const interval = setInterval(fetchData, 3000);
-
-//   return () => clearInterval(interval);
-// }, []);
-
-useEffect(() => {
+  // === DATOS EN TIEMPO REAL (SOCKET) ===
+  useEffect(() => {
     socket.on("aire_update", (datoNuevo) => {
-        setData(prev => [...prev, datoNuevo]);
+      if (source === "Simulado" || source === "Tiempo Real") {
+        setData((prev) => [...prev, datoNuevo]);
+        setSource("Tiempo Real");
+      }
     });
-
     return () => socket.off("aire_update");
-}, []);
-
-
+  }, [source]);
 
   // === FILTROS ===
   const datosFiltrados =
@@ -123,47 +129,58 @@ useEffect(() => {
       : data.filter((d) => d.device === filtros.sensor);
 
   const labels = datosFiltrados
-  .filter((d) => d && d.time)   // ⬅️ FILTRA nulos
-  .map((d) => new Date(d.time).toLocaleTimeString());
-
+    .filter((d) => d && d.time)
+    .map((d) => new Date(d.time).toLocaleTimeString());
 
   // === 1️⃣ EVOLUCIÓN TEMPERATURA Y HUMEDAD ===
   const tempTrend = {
-  labels,
-  datasets: [
-    {
-      label: "Temperatura (°C)",
-      data: datosFiltrados
-        .filter((d) => d && d.object && d.object.temperature)
-        .map((d) => d.object.temperature),
-      borderColor: "#ffa600",
-      tension: 0.4,
-    },
-    {
-      label: "Humedad (%)",
-      data: datosFiltrados
-        .filter((d) => d && d.object && d.object.humidity)
-        .map((d) => d.object.humidity),
-      borderColor: "#42a5f5",
-      tension: 0.4,
-    },
-  ],
-};
-
+    labels,
+    datasets: [
+      {
+        label: "Temperatura (°C)",
+        data: datosFiltrados
+          .filter((d) => d.object?.temperature)
+          .map((d) => d.object.temperature),
+        borderColor: "#ffa600",
+        tension: 0.4,
+      },
+      {
+        label: "Humedad (%)",
+        data: datosFiltrados
+          .filter((d) => d.object?.humidity)
+          .map((d) => d.object.humidity),
+        borderColor: "#42a5f5",
+        tension: 0.4,
+      },
+    ],
+  };
 
   // === 2️⃣ PROMEDIO POR SENSOR ===
+  const sensoresUnicos = [
+    ...new Set(
+      data
+        .map((d) => d.device_name || d.device)
+        .filter((x) => typeof x === "string" && x.trim() !== "")
+    ),
+  ];
+
   const avgTemp = {
-    labels: sensores,
+    labels: sensoresUnicos.length > 0 ? sensoresUnicos : ["Sin datos"],
     datasets: [
       {
         label: "Promedio de Temperatura (°C)",
-        data: sensores.map(
-          (s) =>
-            datosFiltrados
-              .filter((d) => d.device === s)
-              .reduce((sum, d) => sum + parseFloat(d.object.temperature || 0), 0) /
-            (datosFiltrados.filter((d) => d.device === s).length || 1)
-        ),
+        data: sensoresUnicos.map((s) => {
+          const valores = data
+            .filter(
+              (d) =>
+                (d.device_name === s || d.device === s) &&
+                d.object?.temperature != null
+            )
+            .map((d) => parseFloat(d.object.temperature));
+          return valores.length > 0
+            ? valores.reduce((a, b) => a + b, 0) / valores.length
+            : 0;
+        }),
         backgroundColor: "#64ffda",
       },
     ],
@@ -197,8 +214,8 @@ useEffect(() => {
         tension: 0.3,
       },
       {
-        label: "Límite Superior (600ppm)",
-        data: new Array(labels.length).fill(600),
+        label: "Límite Superior (1300ppm)",
+        data: new Array(labels.length).fill(1300),
         borderColor: "#ff5252",
         borderDash: [6, 6],
       },
@@ -245,15 +262,14 @@ useEffect(() => {
     { tipo: "scatter", componente: <Scatter data={scatterTH} options={baseOptions("Relación entre Temperatura y Humedad", "Temperatura (°C)", "Humedad (%)")} /> },
   ];
 
+  // === EXPORTAR EXCEL ===
   const exportToExcel = (index) => {
     const chart = charts[index];
     const chartData = chart.componente.props.data;
-
-    let headers = [];
-    let rows = [];
-
     const labels = chartData.labels || [];
     const datasets = chartData.datasets || [];
+    let headers = [];
+    let rows = [];
 
     const isScatter =
       datasets.length > 0 &&
@@ -265,7 +281,6 @@ useEffect(() => {
 
     if (!isScatter) {
       headers = ["Label", ...datasets.map((d) => d.label)];
-
       rows = labels.map((label, i) => {
         const row = [label];
         datasets.forEach((d) => row.push(d.data[i] ?? ""));
@@ -280,21 +295,10 @@ useEffect(() => {
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
 
-    const now = new Date();
-    const formatted =
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0") +
-      "_" +
-      String(now.getHours()).padStart(2, "0") +
-      "-" +
-      String(now.getMinutes()).padStart(2, "0") +
-      "-" +
-      String(now.getSeconds()).padStart(2, "0");
-
-    XLSX.writeFile(workbook, `grafico_${index + 1}_${formatted}.xlsx`);
+    XLSX.writeFile(
+      workbook,
+      `grafico_${index + 1}_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`
+    );
   };
 
   return (
@@ -312,7 +316,7 @@ useEffect(() => {
       <div style={{ flex: 1 }}>
         <h2>🌫️ Sensor de Aire</h2>
         <p style={{ color: "gray" }}>Fuente: {source}</p>
-        <input type="file" accept=".csv" onChange={handleFileUpload} />
+        <input type="file" accept=".csv, .xlsx" onChange={handleFileUpload} />
 
         <div
           style={{
@@ -325,8 +329,6 @@ useEffect(() => {
           {charts.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
-
-              {/* BOTONES */}
               <div
                 style={{
                   display: "flex",
@@ -335,7 +337,6 @@ useEffect(() => {
                   gap: "10px",
                 }}
               >
-                {/* BOTÓN ORIGINAL */}
                 <button
                   onClick={() => exportToExcel(i)}
                   style={{
@@ -345,13 +346,10 @@ useEffect(() => {
                     border: "none",
                     borderRadius: "6px",
                     cursor: "pointer",
-                    fontSize: "14px",
                   }}
                 >
                   Descargar Reporte
                 </button>
-
-                {/* ⭐ NUEVO: BOTÓN PANTALLA COMPLETA */}
                 <button
                   onClick={() => openFullScreen(g.componente)}
                   style={{
@@ -361,7 +359,6 @@ useEffect(() => {
                     border: "none",
                     borderRadius: "6px",
                     cursor: "pointer",
-                    fontSize: "14px",
                   }}
                 >
                   Pantalla Completa
@@ -372,7 +369,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ⭐⭐⭐ MODAL DE PANTALLA COMPLETA ⭐⭐⭐ */}
       {fullscreenChart && (
         <FullScreenChart chart={fullscreenChart} onClose={closeFullScreen} />
       )}

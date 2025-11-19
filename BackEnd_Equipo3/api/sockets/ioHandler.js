@@ -32,7 +32,10 @@ export default (io) => {
       const sonido = await getLatestSonido();
       const soterrado = await getLatestSoterrado();
 
-      if (esAireValido(aire)) io.emit("aire_update", aire);
+      if (esAireValido(aire)) {
+  console.log("AIRE BACKEND ENVÍA →", aire);
+  io.emit("aire_update", aire);
+}
       if (esSonidoValido(sonido)) io.emit("sonido_update", sonido);
       if (esSoterradoValido(soterrado)) io.emit("soterrado_update", soterrado);
 

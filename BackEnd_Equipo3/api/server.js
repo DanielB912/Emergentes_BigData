@@ -21,7 +21,10 @@ const io = new Server(server, {
   },
 });
 
-ioHandler(io);
+io.on("connection", (socket) => {
+  console.log("Cliente conectado vía WebSocket");
+  ioHandler(io);
+});
 
 // Rutas API
 app.use("/api/upload", uploadRoutes);

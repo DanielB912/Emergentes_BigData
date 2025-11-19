@@ -12,39 +12,42 @@ function SidebarFiltrosAvanzado({
 }) {
   const [desde, setDesde] = useState(filtros.desde);
   const [hasta, setHasta] = useState(filtros.hasta);
-  const [variable, setVariable] = useState(filtros.variable);
+  const [variable, setVariable] = useState(filtros.variable || "todos");
   const [sensor, setSensor] = useState(filtros.sensor || "todos");
-  const [tipoSensor, setTipoSensor] = useState("aire");
   const [chartType, setChartType] = useState(filtros.chartType || "todos");
 
-  // detectar tipo de sensor automáticamente
+  // 🔹 Detectar tipo de dashboard actual por URL
+  const [tipoSensor, setTipoSensor] = useState("aire");
   useEffect(() => {
-    if (["temperature", "humidity", "co2", "pressure"].includes(variable))
-      setTipoSensor("aire");
-    else if (["laeq", "laimax", "battery"].includes(variable))
+    if (window.location.pathname.toLowerCase().includes("sonido"))
       setTipoSensor("sonido");
-    else if (["vibration", "moisture", "methane", "temperature"].includes(variable))
+    else if (window.location.pathname.toLowerCase().includes("soterrado"))
       setTipoSensor("soterrado");
-  }, [variable]);
+    else setTipoSensor("aire");
+  }, []);
 
   const aplicarFiltros = () => {
     setFiltros({ ...filtros, desde, hasta, variable, sensor, chartType });
     onAplicar();
   };
 
+  // 🔹 Variables disponibles según tipo de sensor
   const variablesPorTipo = {
     aire: [
+      { value: "todos", label: "Todas las variables" },
       { value: "temperature", label: "Temperatura (°C)" },
       { value: "humidity", label: "Humedad (%)" },
       { value: "co2", label: "CO₂ (ppm)" },
       { value: "pressure", label: "Presión (hPa)" },
     ],
     sonido: [
-      { value: "laeq", label: "Ruido LAeq (dB)" },
-      { value: "laimax", label: "Ruido Máx (dB)" },
+      { value: "todos", label: "Todas las variables" },
+      { value: "laeq", label: "Nivel Sonoro LAeq (dB)" },
+      { value: "laimax", label: "Nivel Máx (dB)" },
       { value: "battery", label: "Nivel de Batería (%)" },
     ],
     soterrado: [
+      { value: "todos", label: "Todas las variables" },
       { value: "vibration", label: "Vibración (Hz)" },
       { value: "moisture", label: "Humedad del Suelo (%)" },
       { value: "methane", label: "Metano (ppm)" },
@@ -52,7 +55,7 @@ function SidebarFiltrosAvanzado({
     ],
   };
 
-  // 🔹 ahora incluye "todos"
+  // 🔹 Tipos de gráfico disponibles
   const chartOptions = [
     { value: "todos", label: "📊 Todos los gráficos" },
     { value: "line", label: "📈 Línea" },
@@ -75,7 +78,9 @@ function SidebarFiltrosAvanzado({
         flexDirection: "column",
       }}
     >
-      <h3 style={{ color: "#64ffda", marginBottom: "15px" }}>📊 Filtros Avanzados</h3>
+      <h3 style={{ color: "#64ffda", marginBottom: "15px" }}>
+        📊 Filtros Avanzados
+      </h3>
 
       <label style={labelStyle}>Desde:</label>
       <DatePicker
@@ -138,7 +143,7 @@ function SidebarFiltrosAvanzado({
       )}
 
       <button onClick={aplicarFiltros} style={btnAplicar}>
-        Aplicar
+        Aplicar Filtros
       </button>
 
       <button onClick={onResetZoom} style={btnZoom}>
@@ -148,7 +153,7 @@ function SidebarFiltrosAvanzado({
   );
 }
 
-// estilos reutilizables
+// === Estilos ===
 const labelStyle = { fontWeight: "bold", marginTop: "10px", marginBottom: "4px" };
 
 const selectStyle = {

@@ -6,28 +6,43 @@ import AireDashboard from "./components/AireDashboard";
 import SonidoDashboard from "./components/SonidoDashboard";
 import SoterradoDashboard from "./components/SoterradoDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Register from "./components/Register";
 import "./styles.css";
 
 function App() {
   const [user, setUser] = useState(null);
   const [vista, setVista] = useState("aire");
 
-  // Si no hay usuario autenticado, mostrar login
+  // 🔐 Si no hay sesión → mostrar login
   if (!user) {
     return <Login onLogin={setUser} />;
   }
 
-  // Determina qué vista mostrar según la opción seleccionada
+  // 🔥 Render dinámico según la vista actual
   const renderVista = () => {
     switch (vista) {
       case "aire":
         return <AireDashboard role={user.role} />;
+
       case "sonido":
         return <SonidoDashboard role={user.role} />;
+
       case "soterrado":
         return <SoterradoDashboard role={user.role} />;
+
       case "proyeccion":
         return <ProyeccionML />;
+
+      case "registro":
+        // 👉 AQUÍ ya NO comprobamos el rol, eso lo hace Register
+        return (
+          <Register
+            user={user}
+            onRegister={() => setVista("aire")} // después de crear usuario vuelve a Aire
+            irLogin={() => setVista("aire")}   // también se usa para el botón "Volver"
+          />
+        );
+
       default:
         return <AireDashboard role={user.role} />;
     }
@@ -35,12 +50,14 @@ function App() {
 
   return (
     <div className="app-container">
-      <Navbar setVista={setVista} vista={vista} user={user} setUser={setUser} />
+      <Navbar
+        setVista={setVista}
+        vista={vista}
+        user={user}
+        setUser={setUser}
+      />
 
       <div className="dashboard-container">
-        {/* ❌ Eliminamos el sidebar viejo */}
-        {/* {user.role === "ejecutivo" && <SidebarFiltros />} */}
-
         <ProtectedRoute user={user}>
           <main className="content">{renderVista()}</main>
         </ProtectedRoute>

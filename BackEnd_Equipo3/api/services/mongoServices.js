@@ -19,7 +19,7 @@ export const getLatestAire = async () => {
   const res = await db
     .collection("sensor_aire")
     .find()
-    .sort({ time: -1 })
+    .sort({ _id: -1 })
     .limit(1)
     .toArray();
   return res[0];
@@ -29,7 +29,7 @@ export const getLatestSonido = async () => {
   const res = await db
     .collection("sensor_sonido")
     .find()
-    .sort({ time: -1 })
+    .sort({ _id: -1 })
     .limit(1)
     .toArray();
   return res[0];
@@ -39,7 +39,7 @@ export const getLatestSoterrado = async () => {
   const res = await db
     .collection("sensor_soterrado")
     .find()
-    .sort({ time: -1 })
+    .sort({ _id: -1 })
     .limit(1)
     .toArray();
   return res[0];

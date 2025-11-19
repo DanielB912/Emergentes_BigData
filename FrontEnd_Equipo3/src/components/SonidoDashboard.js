@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Line, Bar, Pie, Scatter } from "react-chartjs-2";
+import { Line, Bar, Pie } from "react-chartjs-2";
 import Papa from "papaparse";
 import { socket } from "../socket";
 import SidebarFiltrosAvanzado from "./SidebarFiltrosAvanzado";
-import FullScreenChart from "./FullScreenChart"; // ⬅️ AGREGADO
+import FullScreenChart from "./FullScreenChart";
+import * as XLSX from "xlsx";
 import {
   Chart,
   LineElement,
@@ -30,7 +31,6 @@ Chart.register(
   Legend,
   zoomPlugin
 );
-import * as XLSX from "xlsx";
 
 function SonidoDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -44,46 +44,106 @@ function SonidoDashboard({ role }) {
   const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
-
-  // === NUEVO: Estado para Pantalla Completa ===
   const [fullscreenChart, setFullscreenChart] = useState(null);
 
-  // === LECTURA CSV ===
+  // === LECTURA CSV / XLSX ===
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: true,
-      complete: (result) => {
-        const parsed = result.data
-          .filter((row) => row["deviceInfo.deviceName"])
-          .map((row) => ({
-            device: row["deviceInfo.deviceName"],
-            time: row.time || new Date().toISOString(),
-            object: {
-              laeq: row.LAEq || row.laeq || Math.random() * 20 + 60,
-              laimax: row.LAIMax || row.laimax || Math.random() * 20 + 75,
-              battery: row.Battery || row.battery || Math.random() * 30 + 70,
-            },
-          }));
+
+    const extension = file.name.split(".").pop().toLowerCase();
+
+    if (extension === "csv") {
+      Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        complete: (result) => {
+          const parsed = result.data
+            .filter((row) => row.device_name || row.sensor_id)
+            .map((row) => ({
+              device:
+                row.device_name || `sensor_sonido_${row.sensor_id || 1}`,
+              time: row.time || row.fecha_hora || new Date().toISOString(),
+              object: {
+                laeq: parseFloat(row.laeq) || 0,
+                lai: parseFloat(row.lai) || 0,
+                laimax: parseFloat(row.laimax) || 0,
+                battery: parseFloat(row.battery) || 0,
+                status: row.status || "OK",
+              },
+            }));
+          setData(parsed);
+          setSensores([...new Set(parsed.map((d) => d.device))]);
+          setSource("Archivo CSV");
+        },
+      });
+    } else if (extension === "xlsx") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const workbook = XLSX.read(e.target.result, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        const parsed = rows.map((row) => ({
+          device: `sensor_sonido_${row.sensor_id || 1}`,
+          time: row.fecha_hora || new Date().toISOString(),
+          object: {
+            laeq: parseFloat(row.laeq) || 0,
+            lai: parseFloat(row.lai) || 0,
+            laimax: parseFloat(row.laimax) || 0,
+            battery: parseFloat(row.battery) || 0,
+            status: row.status || "OK",
+          },
+        }));
+
         setData(parsed);
-        setSource("CSV");
         setSensores([...new Set(parsed.map((d) => d.device))]);
-      },
-    });
+        setSource("Archivo XLSX");
+      };
+      reader.readAsBinaryString(file);
+    } else {
+      alert("Formato no soportado. Usa CSV o XLSX.");
+    }
   };
 
-  // === DATOS SIMULADOS / SOCKET ===
+  // === DATOS EN TIEMPO REAL ===
   useEffect(() => {
-  socket.on("sonido_update", (datoNuevo) => {
-    setData(prev => [...prev, datoNuevo]);
-  });
-  return () => socket.off("sonido_update");
-}, []);
+    socket.on("sonido_update", (datoNuevo) => {
+      const dato = {
+        device: datoNuevo.device_name || datoNuevo.device || "sensor_sonido",
+        time: datoNuevo.time || new Date().toISOString(),
+        object: {
+          laeq:
+            datoNuevo.object?.laeq ??
+            datoNuevo.laeq ??
+            Math.random() * 10 + 50,
+          lai:
+            datoNuevo.object?.lai ??
+            datoNuevo.lai ??
+            Math.random() * 10 + 40,
+          laimax:
+            datoNuevo.object?.laimax ??
+            datoNuevo.laimax ??
+            Math.random() * 10 + 70,
+          battery:
+            datoNuevo.object?.battery ??
+            datoNuevo.battery ??
+            Math.random() * 20 + 80,
+          status: datoNuevo.status || "OK",
+        },
+      };
+      setData((prev) => [...prev.slice(-99), dato]);
+      setSensores((prev) =>
+        [...new Set([...prev, dato.device])].filter(Boolean)
+      );
+      setSource("Tiempo Real");
+    });
 
+    return () => socket.off("sonido_update");
+  }, []);
 
-
+  // === DATOS FILTRADOS ===
   const datosFiltrados =
     filtros.sensor === "todos"
       ? data
@@ -111,7 +171,7 @@ function SonidoDashboard({ role }) {
             label: `Nivel de Ruido (${s})`,
             data: datosFiltrados
               .filter((d) => d.device === s)
-              .map((d) => d.object.laeq),
+              .map((d) => d.object.laeq ?? 0),
             borderColor: colorSet[i % colorSet.length],
             tension: 0.4,
             fill: false,
@@ -119,44 +179,33 @@ function SonidoDashboard({ role }) {
         : [
             {
               label: `Nivel de Ruido (${filtros.sensor})`,
-              data: datosFiltrados.map((d) => d.object.laeq),
+              data: datosFiltrados.map((d) => d.object.laeq ?? 0),
               borderColor: "#ffb74d",
               tension: 0.4,
             },
           ],
   };
 
-  // === 2️⃣ DISTRIBUCIÓN POR SENSOR ===
-  const boxPlotSimulado = {
-    labels: sensores,
-    datasets: [
-      {
-        label: "Distribución del Nivel de Sonido por Sensor",
-        data: sensores.map(() => Math.floor(30 + Math.random() * 50)),
-        backgroundColor: colorSet,
-      },
-    ],
-  };
-
-  // === 3️⃣ PROMEDIO DE RUIDO POR SENSOR ===
+  // === 2️⃣ PROMEDIO POR SENSOR ===
   const avgSummary = {
-    labels: sensores,
+    labels: sensores.length ? sensores : ["Sin datos"],
     datasets: [
       {
         label: "Promedio del Nivel de Ruido (dB)",
-        data: sensores.map(
-          (s) =>
-            datosFiltrados
-              .filter((d) => d.device === s)
-              .reduce((sum, d) => sum + parseFloat(d.object.laeq || 0), 0) /
-            (datosFiltrados.filter((d) => d.device === s).length || 1)
-        ),
+        data: sensores.map((s) => {
+          const valores = data
+            .filter((d) => d.device === s)
+            .map((d) => parseFloat(d.object.laeq ?? 0));
+          return valores.length > 0
+            ? valores.reduce((a, b) => a + b, 0) / valores.length
+            : 0;
+        }),
         backgroundColor: "#26c6da",
       },
     ],
   };
 
-  // === 4️⃣ HISTOGRAMA ===
+  // === 3️⃣ DISTRIBUCIÓN GENERAL ===
   const histNoise = {
     labels: ["50-60", "60-70", "70-80", "80-90", "90+"],
     datasets: [
@@ -168,13 +217,13 @@ function SonidoDashboard({ role }) {
     ],
   };
 
-  // === 5️⃣ CONTROL ===
+  // === 4️⃣ CONTROL 6σ ===
   const controlChart = {
     labels,
     datasets: [
       {
         label: "Nivel Promedio de Ruido",
-        data: datosFiltrados.map((d) => d.object.laeq),
+        data: datosFiltrados.map((d) => d.object.laeq ?? 0),
         borderColor: "#42a5f5",
         tension: 0.3,
       },
@@ -185,8 +234,8 @@ function SonidoDashboard({ role }) {
         borderDash: [6, 6],
       },
       {
-        label: "Límite Inferior (60 dB)",
-        data: new Array(labels.length).fill(60),
+        label: "Límite Inferior (30 dB)",
+        data: new Array(labels.length).fill(30),
         borderColor: "#9ccc65",
         borderDash: [6, 6],
       },
@@ -206,11 +255,58 @@ function SonidoDashboard({ role }) {
   });
 
   const todosLosGraficos = [
-    { tipo: "line", componente: <Line data={noiseTrend} options={baseOptions("Evolución del Nivel de Ruido Ambiental", "Tiempo", "Nivel (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={boxPlotSimulado} options={baseOptions("Distribución del Nivel de Sonido por Sensor", "Sensor", "Nivel Promedio (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={avgSummary} options={baseOptions("Promedio de Ruido por Sensor", "Sensor", "Promedio (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={histNoise} options={baseOptions("Frecuencia de Niveles de Ruido", "Rango (dB)", "Cantidad de Observaciones")} /> },
-    { tipo: "line", componente: <Line data={controlChart} options={baseOptions("Gráfico de Control de Ruido (I-MR)", "Tiempo", "Nivel (dB)")} /> },
+    {
+      tipo: "line",
+      componente: (
+        <Line
+          data={noiseTrend}
+          options={baseOptions(
+            "Evolución del Nivel de Ruido Ambiental",
+            "Tiempo",
+            "Nivel (dB)"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "bar",
+      componente: (
+        <Bar
+          data={avgSummary}
+          options={baseOptions(
+            "Promedio de Ruido por Sensor",
+            "Sensor",
+            "Promedio (dB)"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "bar",
+      componente: (
+        <Bar
+          data={histNoise}
+          options={baseOptions(
+            "Frecuencia de Niveles de Ruido",
+            "Rango (dB)",
+            "Cantidad de Observaciones"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "line",
+      componente: (
+        <Line
+          data={controlChart}
+          options={baseOptions(
+            "Gráfico de Control de Ruido (6σ)",
+            "Tiempo",
+            "Nivel (dB)"
+          )}
+        />
+      ),
+    },
   ];
 
   const graficosFiltrados =
@@ -221,7 +317,7 @@ function SonidoDashboard({ role }) {
           ...todosLosGraficos.filter((g) => g.tipo !== filtros.chartType),
         ];
 
-  // === EXPORTAR EXCEL ===
+  // === EXPORTAR A EXCEL ===
   const exportToExcel = (index) => {
     const chart = graficosFiltrados[index];
     if (!chart) return;
@@ -266,7 +362,7 @@ function SonidoDashboard({ role }) {
       <div style={{ flex: 1 }}>
         <h2>🔊 Sensor de Sonido</h2>
         <p style={{ color: "gray" }}>🔁 Fuente: {source}</p>
-        <input type="file" accept=".csv" onChange={handleFileUpload} />
+        <input type="file" accept=".csv, .xlsx" onChange={handleFileUpload} />
 
         <div
           style={{
@@ -279,7 +375,6 @@ function SonidoDashboard({ role }) {
           {graficosFiltrados.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
-
               <div
                 style={{
                   display: "flex",
@@ -289,30 +384,12 @@ function SonidoDashboard({ role }) {
                 }}
               >
                 <button
-                  onClick={() => setFullscreenChart(g.componente)} // ⬅️ NUEVO
-                  style={{
-                    padding: "8px 12px",
-                    background: "#2196f3",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                  }}
+                  onClick={() => setFullscreenChart(g.componente)}
+                  style={btnBlue}
                 >
                   Pantalla Completa
                 </button>
-
-                <button
-                  onClick={() => exportToExcel(i)}
-                  style={{
-                    padding: "8px 14px",
-                    background: "#4caf50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                  }}
-                >
+                <button onClick={() => exportToExcel(i)} style={btnGreen}>
                   Descargar Excel
                 </button>
               </div>
@@ -321,9 +398,11 @@ function SonidoDashboard({ role }) {
         </div>
       </div>
 
-      {/* === MODAL DE PANTALLA COMPLETA === */}
       {fullscreenChart && (
-        <FullScreenChart chart={fullscreenChart} onClose={() => setFullscreenChart(null)} />
+        <FullScreenChart
+          chart={fullscreenChart}
+          onClose={() => setFullscreenChart(null)}
+        />
       )}
     </div>
   );
@@ -334,6 +413,22 @@ const card = {
   padding: 20,
   borderRadius: 10,
   boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+};
+const btnBlue = {
+  padding: "8px 12px",
+  background: "#2196f3",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer",
+};
+const btnGreen = {
+  padding: "8px 14px",
+  background: "#4caf50",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer",
 };
 
 export default SonidoDashboard;

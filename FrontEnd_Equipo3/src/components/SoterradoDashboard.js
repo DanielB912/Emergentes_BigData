@@ -3,7 +3,7 @@ import { Line, Bar, Pie, Scatter } from "react-chartjs-2";
 import Papa from "papaparse";
 import { socket } from "../socket";
 import SidebarFiltrosAvanzado from "./SidebarFiltrosAvanzado";
-import FullScreenChart from "./FullScreenChart"; // ⬅️ AGREGADO
+import FullScreenChart from "./FullScreenChart";
 
 import {
   Chart,
@@ -18,6 +18,7 @@ import {
   Legend,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
+import * as XLSX from "xlsx";
 
 Chart.register(
   LineElement,
@@ -32,8 +33,6 @@ Chart.register(
   zoomPlugin
 );
 
-import * as XLSX from "xlsx";
-
 function SoterradoDashboard({ role }) {
   const [data, setData] = useState([]);
   const [filtros, setFiltros] = useState({
@@ -47,57 +46,96 @@ function SoterradoDashboard({ role }) {
   const chartRef = useRef(null);
   const [source, setSource] = useState("Simulado");
   const [sensores, setSensores] = useState([]);
-
-  // === ESTADO PARA PANTALLA COMPLETA ===
   const [fullscreenChart, setFullscreenChart] = useState(null);
 
+  // === LECTURA CSV / XLSX ===
   const handleFileUpload = (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    Papa.parse(f, {
-      header: true,
-      dynamicTyping: true,
-      complete: (r) => {
-        const parsed = r.data
-          .filter((x) => x["deviceInfo.deviceName"])
-          .map((x) => ({
-            device: x["deviceInfo.deviceName"],
-            time: x.time || new Date().toISOString(),
-            object: {
-              vibration: x.vibration || Math.random() * 100,
-              moisture: x.moisture || Math.random() * 30 + 40,
-              methane: x.methane || Math.random() * 10,
-              temperature: x.temperature || Math.random() * 10 + 20,
-            },
-          }));
+
+    const extension = f.name.split(".").pop().toLowerCase();
+
+    if (extension === "csv") {
+      Papa.parse(f, {
+        header: true,
+        dynamicTyping: true,
+        complete: (r) => {
+          const parsed = r.data
+            .filter((x) => x["deviceInfo.deviceName"] || x.sensor_id)
+            .map((x) => ({
+              device:
+                x["deviceInfo.deviceName"] ||
+                `sensor_soterrado_${x.sensor_id || 1}`,
+              time: x.time || x.fecha_hora || new Date().toISOString(),
+              object: {
+                vibration: parseFloat(x.vibration) || 0,
+                moisture: parseFloat(x.moisture) || 0,
+                methane: parseFloat(x.methane) || 0,
+                temperature: parseFloat(x.temperature) || 0,
+                status: x.status || "OK",
+              },
+            }));
+          setData(parsed);
+          setSensores([...new Set(parsed.map((d) => d.device))]);
+          setSource("Archivo CSV");
+        },
+      });
+    } else if (extension === "xlsx") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const workbook = XLSX.read(e.target.result, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet);
+
+        const parsed = rows.map((row) => ({
+          device: `sensor_soterrado_${row.sensor_id || 1}`,
+          time: row.fecha_hora || new Date().toISOString(),
+          object: {
+            vibration: parseFloat(row.vibration) || 0,
+            moisture: parseFloat(row.moisture) || 0,
+            methane: parseFloat(row.methane) || 0,
+            temperature: parseFloat(row.temperature) || 0,
+            status: row.status || "OK",
+          },
+        }));
+
         setData(parsed);
         setSensores([...new Set(parsed.map((d) => d.device))]);
-        setSource("CSV");
-      },
-    });
+        setSource("Archivo XLSX");
+      };
+      reader.readAsBinaryString(f);
+    } else {
+      alert("Formato no soportado. Usa CSV o XLSX.");
+    }
   };
 
+  // === SOCKET: DATOS EN TIEMPO REAL ===
   useEffect(() => {
-  socket.on("soterrado_update", (datoNuevo) => {
-    setData(prev => [...prev, datoNuevo]);
-  });
-  return () => socket.off("soterrado_update");
-}, []);
-
-
+    socket.on("soterrado_update", (datoNuevo) => {
+      if (source === "Simulado" || source === "Tiempo Real") {
+        setData((prev) => [...prev, datoNuevo]);
+        setSource("Tiempo Real");
+      }
+    });
+    return () => socket.off("soterrado_update");
+  }, [source]);
 
   const datos =
     filtros.sensor === "todos"
       ? data
       : data.filter((d) => d.device === filtros.sensor);
 
-  const labels = datos.map((d) => new Date(d.time).toLocaleTimeString());
+  const labels = datos.map((d) =>
+    new Date(d.time).toLocaleTimeString("es-BO")
+  );
 
+  // === 1️⃣ EVOLUCIÓN VIBRACIÓN Y TEMPERATURA ===
   const vibTrend = {
     labels,
     datasets: [
       {
-        label: "Vibración (%)",
+        label: "Vibración (Hz)",
         data: datos.map((d) => d.object.vibration),
         borderColor: "#64ffda",
       },
@@ -109,34 +147,47 @@ function SoterradoDashboard({ role }) {
     ],
   };
 
+  // === 2️⃣ PROMEDIO POR SENSOR ===
+  const sensoresUnicos = [
+    ...new Set(
+      data
+        .map((d) => d.device_name || d.device)
+        .filter((x) => typeof x === "string" && x.trim() !== "")
+    ),
+  ];
+
   const avgVib = {
-    labels: sensores,
+    labels: sensoresUnicos.length > 0 ? sensoresUnicos : ["Sin datos"],
     datasets: [
       {
-        label: "Promedio Vibración (%)",
-        data: sensores.map(
-          (s) =>
-            datos
-              .filter((d) => d.device === s)
-              .reduce(
-                (sum, d) => sum + parseFloat(d.object.vibration || 0),
-                0
-              ) /
-            (datos.filter((d) => d.device === s).length || 1)
-        ),
+        label: "Promedio de Vibración (Hz)",
+        data: sensoresUnicos.map((s) => {
+          const valores = data
+            .filter(
+              (d) =>
+                (d.device_name === s || d.device === s) &&
+                d.object?.vibration != null
+            )
+            .map((d) => parseFloat(d.object.vibration));
+          return valores.length > 0
+            ? valores.reduce((a, b) => a + b, 0) / valores.length
+            : 0;
+        }),
         backgroundColor: "#26c6da",
       },
     ],
   };
 
+  // === 3️⃣ DISTRIBUCIÓN DE METANO ===
   const pieMethane = {
     labels: ["Bajo (0-3ppm)", "Medio (3-6ppm)", "Alto (>6ppm)"],
     datasets: [
       {
         data: [
           datos.filter((d) => d.object.methane < 3).length,
-          datos.filter((d) => d.object.methane >= 3 && d.object.methane <= 6)
-            .length,
+          datos.filter(
+            (d) => d.object.methane >= 3 && d.object.methane <= 6
+          ).length,
           datos.filter((d) => d.object.methane > 6).length,
         ],
         backgroundColor: ["#42a5f5", "#ffa600", "#ff5252"],
@@ -144,30 +195,32 @@ function SoterradoDashboard({ role }) {
     ],
   };
 
+  // === 4️⃣ CONTROL DE VIBRACIÓN ===
   const controlVib = {
     labels,
     datasets: [
       {
-        label: "Vibración (%)",
+        label: "Vibración (Hz)",
         data: datos.map((d) => d.object.vibration),
         borderColor: "#64ffda",
         tension: 0.3,
       },
       {
-        label: "Límite Superior (80%)",
-        data: new Array(labels.length).fill(80),
+        label: "Límite Superior (10 Hz)",
+        data: new Array(labels.length).fill(10),
         borderColor: "#ff5252",
         borderDash: [6, 6],
       },
       {
-        label: "Límite Inferior (20%)",
-        data: new Array(labels.length).fill(20),
+        label: "Límite Inferior (0 Hz)",
+        data: new Array(labels.length).fill(0),
         borderColor: "#9ccc65",
         borderDash: [6, 6],
       },
     ],
   };
 
+  // === 5️⃣ RELACIÓN VIBRACIÓN - HUMEDAD ===
   const scatterVH = {
     datasets: [
       {
@@ -212,7 +265,7 @@ function SoterradoDashboard({ role }) {
       componente: (
         <Bar
           data={avgVib}
-          options={baseOpt("Promedio de Vibración por Sensor", "Sensor", "%")}
+          options={baseOpt("Promedio de Vibración por Sensor", "Sensor", "Hz")}
         />
       ),
     },
@@ -230,7 +283,7 @@ function SoterradoDashboard({ role }) {
       componente: (
         <Line
           data={controlVib}
-          options={baseOpt("Gráfico de Control (6σ) de Vibración", "Tiempo", "%")}
+          options={baseOpt("Gráfico de Control (6σ) de Vibración", "Tiempo", "Hz")}
         />
       ),
     },
@@ -241,7 +294,7 @@ function SoterradoDashboard({ role }) {
           data={scatterVH}
           options={baseOpt(
             "Relación entre Vibración y Humedad",
-            "Vibración (%)",
+            "Vibración (Hz)",
             "Humedad (%)"
           )}
         />
@@ -249,21 +302,17 @@ function SoterradoDashboard({ role }) {
     },
   ];
 
-  // ============================
-  // EXPORTAR EXCEL
-  // ============================
+  // === EXPORTAR EXCEL ===
   const exportToExcel = (index) => {
     const chart = grafs[index];
-
-    let headers = [];
-    let rows = [];
-
     const chartData = chart.componente.props.data;
     const labels = chartData.labels || [];
     const datasets = chartData.datasets || [];
+    let headers = [];
+    let rows = [];
 
     if (chart.tipo === "scatter") {
-      headers = ["Vibración (%)", "Humedad (%)"];
+      headers = ["Vibración (Hz)", "Humedad (%)"];
       rows = datasets[0].data.map((p) => [p.x, p.y]);
     } else {
       headers = ["Label", ...datasets.map((d) => d.label)];
@@ -302,7 +351,7 @@ function SoterradoDashboard({ role }) {
         <h2>🌍 Sensor Soterrado</h2>
         <p style={{ color: "gray" }}>Fuente: {source}</p>
 
-        <input type="file" accept=".csv" onChange={handleFileUpload} />
+        <input type="file" accept=".csv, .xlsx" onChange={handleFileUpload} />
 
         <div
           style={{
@@ -315,8 +364,6 @@ function SoterradoDashboard({ role }) {
           {grafs.map((g, i) => (
             <div key={i} style={card}>
               {g.componente}
-
-              {/* BOTONES */}
               <div
                 style={{
                   display: "flex",
@@ -358,7 +405,6 @@ function SoterradoDashboard({ role }) {
         </div>
       </div>
 
-      {/* MODAL DE PANTALLA COMPLETA */}
       {fullscreenChart && (
         <FullScreenChart
           chart={fullscreenChart}
@@ -369,10 +415,5 @@ function SoterradoDashboard({ role }) {
   );
 }
 
-const card = {
-  backgroundColor: "#1e1e1e",
-  padding: 20,
-  borderRadius: 10,
-};
-
+const card = { backgroundColor: "#1e1e1e", padding: 20, borderRadius: 10 };
 export default SoterradoDashboard;
