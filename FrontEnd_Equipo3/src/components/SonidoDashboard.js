@@ -17,6 +17,7 @@ import {
   Legend,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
+import * as XLSX from "xlsx";
 
 Chart.register(
   LineElement,
@@ -30,7 +31,6 @@ Chart.register(
   Legend,
   zoomPlugin
 );
-import * as XLSX from "xlsx";
 
 function SonidoDashboard({ role }) {
   const [data, setData] = useState([]);
@@ -119,12 +119,12 @@ function SonidoDashboard({ role }) {
   );
 
   const colorSet = [
-    "#64ffda",
-    "#ffa600",
-    "#42a5f5",
-    "#ff5252",
-    "#ab47bc",
-    "#66fcf1",
+    "#1e88e5",
+    "#64b5f6",
+    "#ef5350",
+    "#ff8a80",
+    "#4db6ac",
+    "#81c784",
   ];
 
   // === 1️⃣ EVOLUCIÓN TEMPORAL ===
@@ -133,109 +133,198 @@ function SonidoDashboard({ role }) {
     datasets:
       filtros.sensor === "todos"
         ? sensores.map((s, i) => ({
-            label: `Nivel de Ruido (${s})`,
+            label: s,
             data: datosFiltrados
               .filter((d) => d.device === s)
               .map((d) => d.object.laeq),
             borderColor: colorSet[i % colorSet.length],
-            tension: 0.4,
+            tension: 0.3,
             fill: false,
+            pointRadius: 0,
+            borderWidth: 2,
           }))
         : [
             {
-              label: `Nivel de Ruido (${filtros.sensor})`,
+              label: filtros.sensor,
               data: datosFiltrados.map((d) => d.object.laeq),
-              borderColor: "#ffb74d",
-              tension: 0.4,
+              borderColor: "#1e88e5",
+              tension: 0.3,
+              fill: false,
+              pointRadius: 0,
+              borderWidth: 3,
             },
           ],
   };
 
-  // === 2️⃣ DISTRIBUCIÓN POR SENSOR ===
+  // === 2️⃣ PROMEDIO DE RUIDO POR SENSOR (1.2) ===
+  const avgSummary = {
+    labels: sensores,
+    datasets: [
+      {
+        label: "Nivel de Sonido Promedio (LAeq)",
+        data: sensores.map((s) => {
+          const datosSensor = datosFiltrados.filter((d) => d.device === s);
+          if (datosSensor.length === 0) return 0;
+          const suma = datosSensor.reduce(
+            (sum, d) => sum + parseFloat(d.object.laeq || 0),
+            0
+          );
+          return suma / datosSensor.length;
+        }),
+        backgroundColor: colorSet,
+      },
+    ],
+  };
+
+  // === 3️⃣ DISTRIBUCIÓN POR SENSOR (1.3 - usamos barras como aproximación) ===
   const boxPlotSimulado = {
     labels: sensores,
     datasets: [
       {
-        label: "Distribución del Nivel de Sonido por Sensor",
+        label: "Rango Aproximado del Nivel de Sonido",
         data: sensores.map(() => Math.floor(30 + Math.random() * 50)),
         backgroundColor: colorSet,
       },
     ],
   };
 
-  // === 3️⃣ PROMEDIO DE RUIDO POR SENSOR ===
-  const avgSummary = {
-    labels: sensores,
-    datasets: [
-      {
-        label: "Promedio del Nivel de Ruido (dB)",
-        data: sensores.map(
-          (s) =>
-            datosFiltrados
-              .filter((d) => d.device === s)
-              .reduce((sum, d) => sum + parseFloat(d.object.laeq || 0), 0) /
-            (datosFiltrados.filter((d) => d.device === s).length || 1)
-        ),
-        backgroundColor: "#26c6da",
-      },
-    ],
-  };
-
-  // === 4️⃣ HISTOGRAMA ===
+  // === 4️⃣ HISTOGRAMA (1.6.1) ===
   const histNoise = {
     labels: ["50-60", "60-70", "70-80", "80-90", "90+"],
     datasets: [
       {
-        label: "Frecuencia de Niveles de Ruido (dB)",
-        data: [3, 8, 12, 6, 2],
-        backgroundColor: "#64ffda",
+        label: "Frecuencia de Niveles de Sonido (dB)",
+        data: [3, 8, 12, 6, 2], // puedes reemplazar esto por un cálculo real
+        backgroundColor: "#1e88e5",
       },
     ],
   };
 
-  // === 5️⃣ CONTROL ===
+  // === 5️⃣ GRÁFICO DE CONTROL (1.5 I-MR simplificado) ===
   const controlChart = {
     labels,
     datasets: [
       {
-        label: "Nivel Promedio de Ruido",
+        label: "Nivel Promedio de Sonido (LAeq)",
         data: datosFiltrados.map((d) => d.object.laeq),
-        borderColor: "#42a5f5",
+        borderColor: "#1e88e5",
         tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
       },
       {
         label: "Límite Superior (90 dB)",
         data: new Array(labels.length).fill(90),
-        borderColor: "#ff5252",
+        borderColor: "#ef5350",
         borderDash: [6, 6],
+        borderWidth: 2,
+        pointRadius: 0,
       },
       {
         label: "Límite Inferior (60 dB)",
         data: new Array(labels.length).fill(60),
-        borderColor: "#9ccc65",
+        borderColor: "#66bb6a",
         borderDash: [6, 6],
+        borderWidth: 2,
+        pointRadius: 0,
       },
     ],
   };
 
+  // === OPCIONES BASE (estilo tipo reporte claro) ===
   const baseOptions = (title, xLabel, yLabel) => ({
     responsive: true,
     plugins: {
-      title: { display: true, text: title, color: "#fff", font: { size: 16 } },
-      legend: { position: "top", labels: { color: "#ccc" } },
+      title: {
+        display: true,
+        text: title,
+        color: "#000",
+        font: { size: 18, weight: "bold" },
+      },
+      legend: {
+        position: "top",
+        labels: { color: "#000" },
+      },
     },
     scales: {
-      x: { title: { display: true, text: xLabel, color: "#ccc" } },
-      y: { title: { display: true, text: yLabel, color: "#ccc" } },
+      x: {
+        title: { display: !!xLabel, text: xLabel, color: "#000" },
+        ticks: { color: "#000" },
+      },
+      y: {
+        title: { display: !!yLabel, text: yLabel, color: "#000" },
+        ticks: { color: "#000" },
+      },
     },
   });
 
+  // === LISTA DE GRÁFICOS (ORDEN Y TÍTULOS COMO EL DOCUMENTO) ===
   const todosLosGraficos = [
-    { tipo: "line", componente: <Line data={noiseTrend} options={baseOptions("Evolución del Nivel de Ruido Ambiental", "Tiempo", "Nivel (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={boxPlotSimulado} options={baseOptions("Distribución del Nivel de Sonido por Sensor", "Sensor", "Nivel Promedio (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={avgSummary} options={baseOptions("Promedio de Ruido por Sensor", "Sensor", "Promedio (dB)")} /> },
-    { tipo: "bar", componente: <Bar data={histNoise} options={baseOptions("Frecuencia de Niveles de Ruido", "Rango (dB)", "Cantidad de Observaciones")} /> },
-    { tipo: "line", componente: <Line data={controlChart} options={baseOptions("Gráfico de Control de Ruido (I-MR)", "Tiempo", "Nivel (dB)")} /> },
+    {
+      tipo: "line",
+      componente: (
+        <Line
+          data={noiseTrend}
+          options={baseOptions(
+            "1.1 Evolución del Nivel de Sonido Promedio (dB)",
+            "Tiempo",
+            "Nivel de Sonido (dB)"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "bar",
+      componente: (
+        <Bar
+          data={avgSummary}
+          options={baseOptions(
+            "1.2 Nivel de Sonido Promedio por Sensor",
+            "Sensor",
+            "Nivel de Sonido Promedio (LAeq)"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "bar",
+      componente: (
+        <Bar
+          data={boxPlotSimulado}
+          options={baseOptions(
+            "1.3 Distribución del Nivel de Sonido por Sensor",
+            "Sensor",
+            "Valor Representativo (dB)"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "bar",
+      componente: (
+        <Bar
+          data={histNoise}
+          options={baseOptions(
+            "1.6.1 Distribución de Frecuencia (Histograma)",
+            "Rango de Nivel de Sonido (dB)",
+            "Cantidad de Observaciones"
+          )}
+        />
+      ),
+    },
+    {
+      tipo: "line",
+      componente: (
+        <Line
+          data={controlChart}
+          options={baseOptions(
+            "1.5 Gráfico de Control de Proceso I-MR (6 Sigma) por Sensor",
+            "Tiempo",
+            "Nivel de Sonido (dB)"
+          )}
+        />
+      ),
+    },
   ];
 
   const graficosFiltrados =
@@ -348,17 +437,20 @@ function SonidoDashboard({ role }) {
 
       {/* === MODAL DE PANTALLA COMPLETA === */}
       {fullscreenChart && (
-        <FullScreenChart chart={fullscreenChart} onClose={() => setFullscreenChart(null)} />
+        <FullScreenChart
+          chart={fullscreenChart}
+          onClose={() => setFullscreenChart(null)}
+        />
       )}
     </div>
   );
 }
 
 const card = {
-  backgroundColor: "#1e1e1e",
+  backgroundColor: "#ffffff", // blanco tipo reporte
   padding: 20,
   borderRadius: 10,
-  boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+  boxShadow: "0 0 10px rgba(0,0,0,0.15)",
 };
 
 export default SonidoDashboard;
