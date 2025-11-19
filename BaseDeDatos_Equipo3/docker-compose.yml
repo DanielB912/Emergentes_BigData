@@ -1,0 +1,81 @@
+
+services:
+  
+  # ===========================
+  # PostgreSQL
+  # ===========================
+  postgres_iot:
+    image: postgres:15
+    container_name: postgres_iot
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: SensoresIoT
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./schema_postgres.sql:/docker-entrypoint-initdb.d/schema.sql
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - iot_network
+
+  # ===========================
+  # pgAdmin
+  # ===========================
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_iot
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@iot.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres_iot
+    networks:
+      - iot_network
+
+
+  # ===========================
+  # MongoDB
+  # ===========================
+  mongo_iot:
+    image: mongo:6
+    container_name: mongo_iot
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - mongodb_data:/data/db
+    networks:
+      - iot_network
+
+  # ===========================
+  # Mongo Express (web UI)
+  # ===========================
+  mongo_express:
+    image: mongo-express
+    container_name: mongo_express_iot
+    restart: always
+    ports:
+      - "8087:8081"    # Spark usa 8081, por eso usamos 8087
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo_iot
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: true
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    depends_on:
+      - mongo_iot
+    networks:
+      - iot_network
+
+volumes:
+  pgdata:
+  mongodb_data:
+
+networks:
+  iot_network:
+    driver: bridge
