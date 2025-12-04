@@ -23,8 +23,8 @@ Incluye ingestión mediante Kafka, procesamiento con Spark Streaming, almacenami
 
 2. Clonar el Repositorio
 
-    git clone https://github.com/DanielB912/Emergentes_BigData.git
-    cd Emergentes_BigData
+        git clone https://github.com/DanielB912/Emergentes_BigData.git
+        cd Emergentes_BigData
 
 3. Levantar toda la infraestructura (Backend, Kafka, Spark, BD)
 
@@ -43,7 +43,7 @@ Incluye ingestión mediante Kafka, procesamiento con Spark Streaming, almacenami
 
 4. Verificar que los Servicios Están Corriendo
 
-    docker ps
+        docker ps
 
 5. Ejecutar el Frontend (React)
 
@@ -62,7 +62,7 @@ Incluye ingestión mediante Kafka, procesamiento con Spark Streaming, almacenami
 
 6. Detener todos los servicios
 
-    docker compose down
+        docker compose down
 
     Esto detiene los contenedores pero mantiene los datos porque usas volúmenes.
 
