@@ -121,3 +121,52 @@ body {
   color: #aaa;
   border: 1px dashed #66fcf1;
 }
+
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.kpi-card {
+  padding: 15px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  text-align: center;
+  color: white;
+  border: 1px solid #333;
+}
+
+.kpi-card h4 {
+  margin-bottom: 10px;
+  color: #4e9cff;
+}
+
+.grafica-container {
+  margin-top: 20px;
+  background: #111;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid #222;
+}
+
+
+.modo-selector {
+  margin: 15px 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.modo-selector select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}
+
+.grafica-contenido {
+  margin-top: 20px;
+}
