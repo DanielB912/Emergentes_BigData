@@ -6,41 +6,34 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from math import sqrt
 
 
-# ============================================================
-# 1. Función robusta para parsear cualquier formato ISO
-# ============================================================
+
 def parse_time(value):
     if pd.isna(value):
         return None
 
-    # Intentar formato con milisegundos
     try:
         return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%S.%f%z")
     except:
         pass
 
-    # Intentar sin milisegundos
+
     try:
         return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%S%z")
     except:
         pass
 
-    # Auto-detector
+
     try:
         return pd.to_datetime(value, utc=True)
     except:
         return None
 
 
-# ============================================================
-# 2. Cargar Excel
-# ============================================================
+
 file_path = "Archivos/WS302-915M SONIDO NOV 2024.xlsx"
 df = pd.read_excel(file_path)
 
-# ============================================================
-# 3. Procesar columna time
-# ============================================================
+#el time
 df["time"] = df["time"].apply(parse_time)
 
 df = df.dropna(subset=["time"])
@@ -51,9 +44,7 @@ df = df.sort_values("time")
 
 df["t"] = df["time"].apply(lambda x: x.toordinal())
 
-# ============================================================
-# 4. Columnas de interés
-# ============================================================
+
 sensor_column = "deviceInfo.deviceName"
 laeq_column = "object.LAeq"
 laimax_column = "object.LAImax"
@@ -63,9 +54,7 @@ sensores = df[sensor_column].unique()
 resultado_laeq = {}
 resultado_laimax = {}
 
-# ============================================================
-# 5. Función para generar predicciones OLS
-# ============================================================
+
 def generar_predicciones(df_sensor, columna_objetivo):
     df_clean = df_sensor.dropna(subset=[columna_objetivo])
 
@@ -101,9 +90,6 @@ def generar_predicciones(df_sensor, columna_objetivo):
     }
 
 
-# ============================================================
-# 6. Calcular predicciones por sensor
-# ============================================================
 for sensor in sensores:
     df_s = df[df[sensor_column] == sensor].copy()
 
@@ -118,9 +104,6 @@ for sensor in sensores:
         resultado_laimax[sensor] = pred_laimax
 
 
-# ============================================================
-# 7. Exportar JSONs
-# ============================================================
 json_laeq = json.dumps(resultado_laeq, indent=4)
 with open("predicciones_sonido_laeqRL.json", "w", encoding="utf-8") as f:
     f.write(json_laeq)
@@ -132,7 +115,7 @@ with open("predicciones_sonido_laimaxRL.json", "w", encoding="utf-8") as f:
 print("✔ Archivo generado: predicciones_sonido_laimaxRL.json")
 
 
-# Opcional: mostrarlos en consola
+
 print("\n=== LAeq ===")
 print(json_laeq)
 
