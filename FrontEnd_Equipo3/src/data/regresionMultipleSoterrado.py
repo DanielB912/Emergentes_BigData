@@ -5,9 +5,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import json
 
-# ===========================================================
-# 1) CARGAR EXCEL
-# ===========================================================
+#se usa los archivo de la carpeta Archivos, son los excel del docente, el de soterrado es el que se extrajo de la bdd pero no da buenos resultados
+
 FILE = "./Archivos/dataset_soterrado.xlsx"
 df = pd.read_excel(FILE)
 
