@@ -12,8 +12,8 @@ import {
   AreaChart,
 } from "recharts";
 
-import predTemp from "../data/prediccion_temperaturaSARIMA.json";
-import predHum from "../data/prediccion_humedadSARIMA.json";
+import predTemp from "../data/PrediccionesAnteriores/prediccion_temperaturaSARIMA.json";
+import predHum from "../data/PrediccionesAnteriores/prediccion_humedadSARIMA.json";
 import "../styles.css";
 
 function ProyeccionAire() {

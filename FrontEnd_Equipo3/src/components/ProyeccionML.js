@@ -5,6 +5,12 @@ import "../styles.css";
 import ProyeccionAire from "../data/proyeccionAire.js";
 import ProyeccionSonido from "../data/proyeccionSonido.js";
 import ProyeccionSoterrado from "../data/proyecccionSoterrado.js";
+import GraficaPrediccion7Dias from "../data/GraficaPrediccion7Dias.js";
+
+//ESTE SCRIPT SOLO ERA PARA VER QUE GRAFICA SALIA
+//LAS GRAFICAS SE GENERAN EN PYTHON AL EJECUTARSE EL SCRIPT
+//LANZA UN OUTPUT COMO RESULTADOS QUE SE PUEDEN USAR DESDE EL FRONTEND
+//LOS JSON SALEN CON LOS NOMBRES: resultados_co2.json, resultados_sensores_soterrados.json, resultados_sonido.json
 
 function ProyeccionML() {
   const [vista, setVista] = useState("aire");
@@ -12,7 +18,7 @@ function ProyeccionML() {
   const renderVista = () => {
     switch (vista) {
       case "aire":
-        return <ProyeccionAire />;
+        return <GraficaPrediccion7Dias />;
 
       case "sonido":
         return <ProyeccionSonido />;

@@ -12,8 +12,8 @@ import {
   AreaChart,
 } from "recharts";
 
-import predLAeq from "../data/prediccion_sonido_laeqSARIMA.json";
-import predLAimax from "../data/prediccion_sonido_laimaxSARIMA.json";
+import predLAeq from "../data/PrediccionesAnteriores/prediccion_sonido_laeqSARIMA.json";
+import predLAimax from "../data/PrediccionesAnteriores/prediccion_sonido_laimaxSARIMA.json";
 import "../styles.css";
 
 export default function ProyeccionSonido() {

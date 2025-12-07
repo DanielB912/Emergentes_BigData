@@ -13,8 +13,8 @@ import {
   ReferenceLine,
 } from "recharts";
 
-import methaneJSON from "../data/predicciones_soterrado_methaneRL.json";
-import vibrationJSON from "../data/predicciones_soterrado_vibrationRL.json";
+import methaneJSON from "../data/PrediccionesAnteriores/predicciones_soterrado_methaneRL.json";
+import vibrationJSON from "../data/PrediccionesAnteriores/predicciones_soterrado_vibrationRL.json";
 
 import "../styles.css";
 
