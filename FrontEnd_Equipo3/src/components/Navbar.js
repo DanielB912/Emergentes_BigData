@@ -12,6 +12,7 @@ const Navbar = ({ setVista, vista, user, setUser }) => {
       <h1 className="logo">📊 Dashboard GAMC</h1>
 
       <nav className="nav-buttons">
+        {/* ===== DATOS EN TIEMPO REAL ===== */}
         <button
           className={vista === "aire" ? "active" : ""}
           onClick={() => setVista("aire")}
@@ -33,16 +34,33 @@ const Navbar = ({ setVista, vista, user, setUser }) => {
           🌎 Soterrado
         </button>
 
+        {/* ===== PROYECCIONES PROPHET ===== */}
         {(user.role === "ejecutivo" || user.role === "administrador") && (
-          <button
-            className={vista === "proyeccion" ? "active" : ""}
-            onClick={() => setVista("proyeccion")}
-          >
-            📈 Proyección ML
-          </button>
+          <>
+            <button
+              className={vista === "prophet-aire" ? "active" : ""}
+              onClick={() => setVista("prophet-aire")}
+            >
+              📈 Prophet Aire
+            </button>
+
+            <button
+              className={vista === "prophet-sonido" ? "active" : ""}
+              onClick={() => setVista("prophet-sonido")}
+            >
+              📈 Prophet Sonido
+            </button>
+
+            <button
+              className={vista === "prophet-soterrado" ? "active" : ""}
+              onClick={() => setVista("prophet-soterrado")}
+            >
+              📈 Prophet Soterrado
+            </button>
+          </>
         )}
 
-        {/* 🔥 Solo el administrador ve esta opción */}
+        {/* ===== SOLO ADMIN ===== */}
         {user.role === "administrador" && (
           <button
             className={vista === "registro" ? "active" : ""}
@@ -54,7 +72,9 @@ const Navbar = ({ setVista, vista, user, setUser }) => {
       </nav>
 
       <div className="user-info">
-        <span>{user.username} ({user.role})</span>
+        <span>
+          {user.username} ({user.role})
+        </span>
         <button onClick={handleLogout}>Cerrar sesión</button>
       </div>
     </header>

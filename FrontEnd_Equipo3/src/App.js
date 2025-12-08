@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import Login from "./components/Login";
 import Navbar from "./components/Navbar";
-import ProyeccionML from "./components/ProyeccionML";
+import AireProphet from "./components/AireProphet";
+import SonidoProphet from "./components/SonidoProphet";
+import SoterradoProphet from "./components/SoterradoProphet";
 import AireDashboard from "./components/AireDashboard";
 import SonidoDashboard from "./components/SonidoDashboard";
 import SoterradoDashboard from "./components/SoterradoDashboard";
@@ -30,16 +32,22 @@ function App() {
       case "soterrado":
         return <SoterradoDashboard role={user.role} />;
 
-      case "proyeccion":
-        return <ProyeccionML />;
+      // ✅ NUEVA SECCIÓN PROPHET
+      case "prophet-aire":
+        return <AireProphet />;
+
+      case "prophet-sonido":
+        return <SonidoProphet />;
+
+      case "prophet-soterrado":
+        return <SoterradoProphet />;
 
       case "registro":
-        // 👉 AQUÍ ya NO comprobamos el rol, eso lo hace Register
         return (
           <Register
             user={user}
-            onRegister={() => setVista("aire")} // después de crear usuario vuelve a Aire
-            irLogin={() => setVista("aire")}   // también se usa para el botón "Volver"
+            onRegister={() => setVista("aire")}
+            irLogin={() => setVista("aire")}
           />
         );
 

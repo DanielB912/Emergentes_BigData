@@ -11,32 +11,33 @@ import {
 
 import dataPred from "../data/prediccion_co2_lineal.json";
 
-//ESTO NO SE USA YA QUE SOLO ERA PARA PROBAR (OJO)
-
-
 export default function GraficaDispercion7Dias() {
-  const sensores = Object.keys(dataPred);
-  const [sensor, setSensor] = useState(sensores[0]);
 
-  // Tomamos las predicciones
-  const pred = dataPred[sensor].predicciones_7_dias;
+  // ✅ Blindaje total contra undefined
+  const sensores = dataPred ? Object.keys(dataPred) : [];
+  const [sensor, setSensor] = useState(sensores.length > 0 ? sensores[0] : "");
 
-  // Convertimos fechas → puntos numéricos
+  // ✅ Blindaje de acceso a predicciones
+  const pred = dataPred?.[sensor]?.predicciones_7_dias || {};
+
+  // ✅ Blindaje de Object.entries
   const datos = Object.entries(pred).map(([fecha, valor], index) => ({
     fecha,
-    dia: index + 1,   // eje X (1–7)
-    valor             // eje Y
+    dia: index + 1,
+    valor
   }));
 
   return (
     <div>
       <h2>Gráfica de Dispersión - Predicción 7 días</h2>
 
-      <select value={sensor} onChange={(e) => setSensor(e.target.value)}>
-        {sensores.map((s) => (
-          <option key={s}>{s}</option>
-        ))}
-      </select>
+      {sensores.length > 0 && (
+        <select value={sensor} onChange={(e) => setSensor(e.target.value)}>
+          {sensores.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+      )}
 
       <ScatterChart
         width={650}
@@ -48,10 +49,8 @@ export default function GraficaDispercion7Dias() {
         <YAxis dataKey="valor" name="CO₂" />
         <Tooltip />
 
-        {/* Puntos de dispersión */}
         <Scatter data={datos} fill="#8884d8" name="Predicción" />
 
-        {/* Línea que une los puntos */}
         <Line
           type="monotone"
           data={datos}
