@@ -57,6 +57,15 @@ const Navbar = ({ setVista, vista, user, setUser }) => {
             >
               📈 Prophet Soterrado
             </button>
+
+
+            <button
+              className={vista === "ml" ? "active" : ""}
+              onClick={() => setVista("ml")}
+            >
+              🤖 Proyecciones ML
+            </button>
+
           </>
         )}
 

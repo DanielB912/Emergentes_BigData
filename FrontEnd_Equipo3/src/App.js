@@ -10,6 +10,8 @@ import SoterradoDashboard from "./components/SoterradoDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Register from "./components/Register";
 import "./styles.css";
+import ProyeccionML from "./components/ProyeccionML";
+
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,6 +43,10 @@ function App() {
 
       case "prophet-soterrado":
         return <SoterradoProphet />;
+
+      case "ml":
+        return <ProyeccionML />;
+
 
       case "registro":
         return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -8,197 +8,135 @@ import {
   CartesianGrid,
   Legend,
   ResponsiveContainer,
-  Area,
-  AreaChart,
 } from "recharts";
 
-import predLAeq from "../data/PrediccionesAnteriores/prediccion_sonido_laeqSARIMA.json";
-import predLAimax from "../data/PrediccionesAnteriores/prediccion_sonido_laimaxSARIMA.json";
+import sonidoData from "../data/resultados_sonido.json";
 import "../styles.css";
 
-export default function ProyeccionSonido() {
-  const [modo, setModo] = useState("semanal");
-  const [variable, setVariable] = useState("laeq");
-  const [sensor, setSensor] = useState("SLS-2648");
-  const [data, setData] = useState([]);
+function ProyeccionSonido() {
+  const [sensor, setSensor] = useState(Object.keys(sonidoData)[0]);
+  const [modo, setModo] = useState("7d"); // 7d | 30d
+  const [serie, setSerie] = useState([]);
   const [kpis, setKpis] = useState({});
 
-  const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-  // 🔄 Procesar cuando algo cambie
   useEffect(() => {
     procesarDatos();
-  }, [modo, variable, sensor]);
-
-  const obtenerJSON = () => {
-    return variable === "laeq" ? predLAeq : predLAimax;
-  };
+  }, [sensor, modo]);
 
   const procesarDatos = () => {
-    const fuenteJSON = obtenerJSON();
+    const sData = sonidoData[sensor];
+    if (!sData) return;
 
-    const sensorData = fuenteJSON[sensor];
-    if (!sensorData) return;
+  
+    const historico = sData.test.fechas.map((f, i) => ({
+      fecha: f,
+      real: sData.test.real[i],
+      predicho: sData.test.predicho[i],
+      estimado: null,
+    }));
 
-    const fuente =
-      modo === "semanal"
-        ? sensorData.weekly_forecast
-        : sensorData.monthly_forecast;
+  
+    const forecast =
+      modo === "7d" ? sData.forecast_7d : sData.forecast_30d;
 
-    const procesado = fuente.map((item) => {
-      const fechaObj = new Date(item.fecha);
-      const diaNombre = diasSemana[fechaObj.getDay()];
+    const futuro = forecast.fechas.map((f, i) => ({
+      fecha: f,
+      real: null,
+      predicho: null,
+      estimado: forecast.estimado[i],
+    }));
 
-      return {
-        fecha: item.fecha.split(" ")[0] + ` (${diaNombre})`,
-        valor: item.valor_predicho,
-        min: item.min,
-        max: item.max,
-        clasificacion: item.clasificacion,
-      };
-    });
-
-    setData(procesado);
-    generarKPIs(procesado);
-  };
-
-  const generarKPIs = (registros) => {
-    const valores = registros.map((d) => d.valor);
-    const minimos = registros.map((d) => d.min);
-    const maximos = registros.map((d) => d.max);
-
-    const clasificaciones = registros.reduce((acc, item) => {
-      acc[item.clasificacion] = (acc[item.clasificacion] || 0) + 1;
-      return acc;
-    }, {});
+ 
+    setSerie([...historico, ...futuro]);
 
     setKpis({
-      promedio: (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(
-        2
-      ),
-      minimo: Math.min(...minimos).toFixed(2),
-      maximo: Math.max(...maximos).toFixed(2),
-      clasificaciones,
+      r2: sData.metrics.r2.toFixed(3),
+      rmse: sData.metrics.rmse.toFixed(2),
+      mae: sData.metrics.mae.toFixed(2),
     });
   };
+
+  const formatFecha = (f) =>
+    new Date(f).toLocaleDateString("es-BO", {
+      day: "2-digit",
+      month: "2-digit",
+    });
 
   return (
     <div className="dashboard">
-      <h2>🔊 Proyección de Sonido (LAeq / LAimax)</h2>
+      <h2>🔊 Proyección de Sonido — LAeq</h2>
 
       {/* SELECTORES */}
       <div className="modo-selector">
-
-        {/* Variable */}
-        <label>Variable:</label>
-        <select value={variable} onChange={(e) => setVariable(e.target.value)}>
-          <option value="laeq">LAeq</option>
-          <option value="laimax">LAimax</option>
-        </select>
-
-        {/* Sensor */}
         <label>Sensor:</label>
         <select value={sensor} onChange={(e) => setSensor(e.target.value)}>
-          <option value="SLS-2648">SLS-2648</option>
-          <option value="SLS-3164">SLS-3164</option>
-          <option value="SLS-8588">SLS-8588</option>
-          <option value="SLS-8654">SLS-8654</option>
-          <option value="SLS-8709">SLS-8709</option>
-          <option value="SLS-8852">SLS-8852</option>
-          <option value="SLS-9199">SLS-9199</option>
-          <option value="SLS-9247">SLS-9247</option>
+          {Object.keys(sonidoData).map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
         </select>
 
-        {/* Modo */}
-        <label>Proyección:</label>
+        <label>Horizonte:</label>
         <select value={modo} onChange={(e) => setModo(e.target.value)}>
-          <option value="semanal">Semanal</option>
-          <option value="mensual">Mensual</option>
+          <option value="7d">7 días</option>
+          <option value="30d">30 días</option>
         </select>
       </div>
 
       {/* KPIs */}
       <div className="kpi-grid">
-        <div className="kpi-card">
-          <h4>📊 Promedio</h4>
-          <p>{kpis.promedio} dB</p>
-        </div>
-
-        <div className="kpi-card">
-          <h4>🔼 Máximo</h4>
-          <p>{kpis.maximo} dB</p>
-        </div>
-
-        <div className="kpi-card">
-          <h4>🔽 Mínimo</h4>
-          <p>{kpis.minimo} dB</p>
-        </div>
-
-        <div className="kpi-card">
-          <h4>📌 Clasificaciones</h4>
-          {kpis.clasificaciones &&
-            Object.entries(kpis.clasificaciones).map(([clave, valor]) => (
-              <p key={clave}>
-                {clave}: {valor}
-              </p>
-            ))}
-        </div>
+        <div className="kpi-card"><h4>R²</h4><p>{kpis.r2}</p></div>
+        <div className="kpi-card"><h4>RMSE</h4><p>{kpis.rmse} dB</p></div>
+        <div className="kpi-card"><h4>MAE</h4><p>{kpis.mae} dB</p></div>
       </div>
 
-      {/* GRÁFICA */}
+      {/* GRÁFICA ÚNICA */}
       <h3>
-        {modo === "semanal"
-          ? `📅 Proyección Semanal (${variable.toUpperCase()}) — ${sensor}`
-          : `📆 Proyección Mensual (${variable.toUpperCase()}) — ${sensor}`}
+        📈 LAeq — Histórico y Pronóstico ({modo === "7d" ? "7 días" : "30 días"})
       </h3>
 
-      <div className="grafica-container">
-        <ResponsiveContainer width="100%" height={400}>
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id="confianza" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ffaf4e" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="#ffaf4e" stopOpacity={0} />
-              </linearGradient>
-            </defs>
+      <ResponsiveContainer width="100%" height={380}>
+        <LineChart data={serie}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="fecha"
+            tickFormatter={formatFecha}
+            type="category"
+          />
+          <YAxis />
+          <Tooltip />
+          <Legend />
 
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="fecha" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
+          {/* REAL */}
+          <Line
+            type="monotone"
+            dataKey="real"
+            stroke="#ff0000"
+            dot
+            name="LAeq real (test)"
+          />
 
-            <Area
-              type="monotone"
-              dataKey="max"
-              stroke="#ff6e40"
-              fill="url(#confianza)"
-              name="Máximo"
-            />
+          {/* PREDICHO */}
+          <Line
+            type="monotone"
+            dataKey="predicho"
+            stroke="#1e90ff"
+            dot={false}
+            name="LAeq predicho (test)"
+          />
 
-            <Area
-              type="monotone"
-              dataKey="min"
-              stroke="#ffcc80"
-              fill="url(#confianza)"
-              name="Mínimo"
-            />
-
-            <Line
-              type="monotone"
-              dataKey="valor"
-              stroke="#ff3d00"
-              strokeWidth={3}
-              dot={false}
-              name={
-                variable === "laeq"
-                  ? "LAeq predicho"
-                  : "LAimax predicho"
-              }
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+          {/* FUTURO */}
+          <Line
+            type="monotone"
+            dataKey="estimado"
+            stroke="#00c853"
+            strokeDasharray="4 4"
+            dot={false}
+            name={`LAeq estimado (${modo})`}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
+
+export default ProyeccionSonido;

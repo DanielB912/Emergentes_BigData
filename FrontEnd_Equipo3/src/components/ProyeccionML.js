@@ -18,7 +18,7 @@ function ProyeccionML() {
   const renderVista = () => {
     switch (vista) {
       case "aire":
-        return <GraficaPrediccion7Dias />;
+        return <ProyeccionAire />;
 
       case "sonido":
         return <ProyeccionSonido />;
