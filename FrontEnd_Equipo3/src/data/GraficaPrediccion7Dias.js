@@ -9,30 +9,43 @@ import {
   Line
 } from "recharts";
 
-import dataPred from "../data/prediccion_co2_lineal.json";
+export default function GraficaDispercion7Dias({ data }) {
+  // Si no llega data, evitamos que explote
+  if (!data) {
+    return <h3 style={{ color: "orange" }}>⚠️ No hay datos para mostrar la predicción de 7 días.</h3>;
+  }
 
-//ESTO NO SE USA YA QUE SOLO ERA PARA PROBAR (OJO)
+  // Validar que la estructura sea correcta
+  const sensores = Object.keys(data);
+  if (sensores.length === 0) {
+    return <h3 style={{ color: "orange" }}>⚠️ No hay sensores dentro del archivo de predicción.</h3>;
+  }
 
-
-export default function GraficaDispercion7Dias() {
-  const sensores = Object.keys(dataPred);
   const [sensor, setSensor] = useState(sensores[0]);
 
-  // Tomamos las predicciones
-  const pred = dataPred[sensor].predicciones_7_dias;
+  // Validar que existan predicciones para el sensor
+  if (!data[sensor] || !data[sensor].predicciones_7_dias) {
+    return <h3 style={{ color: "orange" }}>⚠️ El archivo JSON no contiene predicciones de 7 días.</h3>;
+  }
 
-  // Convertimos fechas → puntos numéricos
+  const pred = data[sensor].predicciones_7_dias;
+
+  // Crear arreglo para Recharts
   const datos = Object.entries(pred).map(([fecha, valor], index) => ({
     fecha,
-    dia: index + 1,   // eje X (1–7)
-    valor             // eje Y
+    dia: fecha,
+    valor
   }));
 
   return (
     <div>
-      <h2>Gráfica de Dispersión - Predicción 7 días</h2>
+      <h2>📅 Predicción — Próximos 7 días</h2>
 
-      <select value={sensor} onChange={(e) => setSensor(e.target.value)}>
+      <select
+        value={sensor}
+        onChange={(e) => setSensor(e.target.value)}
+        style={{ marginBottom: "15px" }}
+      >
         {sensores.map((s) => (
           <option key={s}>{s}</option>
         ))}
@@ -45,18 +58,16 @@ export default function GraficaDispercion7Dias() {
       >
         <CartesianGrid />
         <XAxis dataKey="dia" name="Día" />
-        <YAxis dataKey="valor" name="CO₂" />
+        <YAxis dataKey="valor" name="Valor" />
         <Tooltip />
 
-        {/* Puntos de dispersión */}
-        <Scatter data={datos} fill="#8884d8" name="Predicción" />
+        <Scatter data={datos} fill="#00bfff" name="Predicción" />
 
-        {/* Línea que une los puntos */}
         <Line
           type="monotone"
           data={datos}
           dataKey="valor"
-          stroke="#ff0000"
+          stroke="#ff4d4d"
           dot={false}
           name="Tendencia"
         />

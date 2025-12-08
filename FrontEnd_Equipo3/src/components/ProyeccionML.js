@@ -1,16 +1,18 @@
 import React, { useState } from "react";
 import "../styles.css";
 
-// Importamos las 3 vistas
+// Importación de vistas de predicción
+import GraficaPrediccion7Dias from "../data/GraficaPrediccion7Dias.js";
+
+// JSON generados por Python
+import predAire from "../data/resultados_co2.json";
+import predSonido from "../data/resultados_sonido.json";
+import predSoterrado from "../data/resultados_soterrados.json";
+
+// Componentes de gráficos
 import ProyeccionAire from "../data/proyeccionAire.js";
 import ProyeccionSonido from "../data/proyeccionSonido.js";
 import ProyeccionSoterrado from "../data/proyecccionSoterrado.js";
-import GraficaPrediccion7Dias from "../data/GraficaPrediccion7Dias.js";
-
-//ESTE SCRIPT SOLO ERA PARA VER QUE GRAFICA SALIA
-//LAS GRAFICAS SE GENERAN EN PYTHON AL EJECUTARSE EL SCRIPT
-//LANZA UN OUTPUT COMO RESULTADOS QUE SE PUEDEN USAR DESDE EL FRONTEND
-//LOS JSON SALEN CON LOS NOMBRES: resultados_co2.json, resultados_sensores_soterrados.json, resultados_sonido.json
 
 function ProyeccionML() {
   const [vista, setVista] = useState("aire");
@@ -18,52 +20,55 @@ function ProyeccionML() {
   const renderVista = () => {
     switch (vista) {
       case "aire":
-        return <GraficaPrediccion7Dias />;
-
+        return <ProyeccionAire data={predAire} />;
       case "sonido":
-        return <ProyeccionSonido />;
-
+        return <ProyeccionSonido data={predSonido} />;
       case "soterrado":
-        return <ProyeccionSoterrado />;
-
+        return <ProyeccionSoterrado data={predSoterrado} />;
+      case "7dias":
+        return <GraficaPrediccion7Dias />;
       default:
-        return <ProyeccionAire />;
+        return <p>No hay vista seleccionada.</p>;
     }
   };
 
   return (
-    <div className="dashboard">
-      <h2>📈 Proyección con Machine Learning</h2>
-      <p>Selecciona el tipo de proyección:</p>
+    <div className="proyeccion-container">
+      <h1 className="titulo-proyeccion">📈 Predicciones con Machine Learning</h1>
 
-      {/* 🔘 Selector de 3 vistas */}
-      <div className="proyeccion-selector">
+      {/* Botones de selección */}
+      <div className="proyeccion-buttons">
         <button
-          className={vista === "aire" ? "activo" : ""}
+          className={vista === "aire" ? "btn-activo" : "btn"}
           onClick={() => setVista("aire")}
         >
           🌬️ Aire
         </button>
 
         <button
-          className={vista === "sonido" ? "activo" : ""}
+          className={vista === "sonido" ? "btn-activo" : "btn"}
           onClick={() => setVista("sonido")}
         >
           🔊 Sonido
         </button>
 
         <button
-          className={vista === "soterrado" ? "activo" : ""}
+          className={vista === "soterrado" ? "btn-activo" : "btn"}
           onClick={() => setVista("soterrado")}
         >
           🏗️ Soterrado
         </button>
+
+        <button
+          className={vista === "7dias" ? "btn-activo" : "btn"}
+          onClick={() => setVista("7dias")}
+        >
+          📅 7 días
+        </button>
       </div>
 
       {/* Contenido dinámico */}
-      <div className="proyeccion-contenido">
-        {renderVista()}
-      </div>
+      <div className="proyeccion-contenido">{renderVista()}</div>
     </div>
   );
 }
